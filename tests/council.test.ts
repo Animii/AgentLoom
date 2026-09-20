@@ -6,11 +6,18 @@ import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createApp } from '../src/server/app.js';
 import { councilWorkflow } from '../src/server/templates.js';
-import { parseCouncilReport, unresolvedCouncilFindings, councilSummary } from '../src/server/council.js';
+import { parseCouncilReport, unresolvedCouncilFindings, councilSummary, retainedTranscript } from '../src/server/council.js';
 import type { Run } from '../src/shared/types.js';
 
 const passing = () => ({ verdict: 'PASS', summary: 'AC1 verified against source and recorded check.', criteria: [{ id: 'AC1', status: 'met', evidence: ['app.txt:1 contains fixed; recorded check exit 0'] }], findings: [], resolutions: [] });
 const blocked = () => ({ ...passing(), verdict: 'BLOCKED', summary: 'The value is incorrect.', criteria: [{ id: 'AC1', status: 'unmet', evidence: ['app.txt:1'] }], findings: [{ id: 'F1', criterion: 'AC1', severity: 'blocker', summary: 'Incorrect value', evidence: ['app.txt:1 should contain fixed'] }] });
+
+test('repeated cumulative completion does not truncate retained transcript and tool offsets twice',()=>{
+ const full='discarded prefix'+'x'.repeat(63980)+' tool boundary text!';const retained=full.slice(-64000);
+ assert.equal(retainedTranscript(retained,full),retained);
+ assert.equal(retainedTranscript(retained,full+'new suffix'),retained+'new suffix');
+ assert.equal(retainedTranscript('Inspection text','Final report'),'Inspection text\n\nFinal report');
+});
 
 async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'loom-council-'));
@@ -24,6 +31,11 @@ async function fixture() {
       if (step.id === 'plan') return { output: 'AC1: app.txt must contain fixed. Run the configured check.\n\nPLAN_READY', sessionId: null, costUsd: null };
       if (step.id === 'build') { await writeFile(path.join(workspace, 'app.txt'), fixed ? 'fixed' : 'broken'); return { output: 'Implementation done.', sessionId: null, costUsd: null }; }
       if (step.id === 'council-chair') return { output: JSON.stringify({ summary: 'Checked all reports against AC1.', disputes: mode === 'dispute' ? ['AC1 evidence contradicts the product claim.'] : [] }), sessionId: null, costUsd: 0.01 };
+      if(mode==='long_output'){
+        const first='x'.repeat(40000);const last='y'.repeat(24001)+'\nCOUNCIL_JSON\n'+JSON.stringify(passing())+'\nEND_COUNCIL_JSON';
+        onEvent({type:'output',message:first});onEvent({type:'tool',message:'read',toolCall:{id:'long-tool',name:'read',status:'completed',input:{},startedAt:new Date().toISOString()}});onEvent({type:'output',message:last});
+        return {output:first+last,sessionId:null,costUsd:null};
+      }
       onEvent({type:'output',message:'Inspecting AC1.\n'});
       onEvent({type:'tool',message:'read',toolCall:{id:'read-1',name:'read_project_file',status:'completed',input:{path:'app.txt'},startedAt:new Date().toISOString()}});
       onEvent({type:'output',message:'Evidence collected.\n'});
@@ -33,6 +45,7 @@ async function fixture() {
       if (mode === 'mutate' && step.id === 'council-product') await writeFile(path.join(workspace, 'app.txt'), 'modified by reviewer');
       const challenge = prompt.includes('ONE FOCUSED CHALLENGE ROUND');
       const report = ['block','partial_initial','partial_challenge'].includes(mode) && step.id === 'council-adversarial' ? blocked() : passing();
+      if(mode==='warning'&&step.id==='council-adversarial')Object.assign(report,{findings:[{...blocked().findings[0],severity:'warning'}]});
       if(mode==='partial_challenge'&&step.id==='council-adversarial')Object.assign(report,{findings:[{...blocked().findings[0],id:'F2',summary:'New challenge blocker'}],resolutions:[{findingId:'F1',evidence:'F1 refuted; a different defect F2 remains.'}]});
       if ((challenge || prompt.includes('Prior findings requiring verification')) && mode === 'resolve' && step.id === 'council-adversarial') Object.assign(report, { resolutions: [{ findingId: 'F1', evidence: 'Read app.txt:1; value is fixed and the recorded check proves it. Earlier complaint was incorrect.' }] });
       return { output: JSON.stringify(report), sessionId: null, costUsd: 0.01 };
@@ -184,4 +197,21 @@ test('repair handoffs carry unresolved blockers across revisions until explicit 
   f.mode('resolve');f.app.engine.rework(run.id);final=await f.finish(run.id);assert.equal(final.status,'waiting_approval');assert.equal(final.steps[3].council!.reviewers[2].report?.resolutions[0].findingId,'F1');
   assert.match(f.prompts.filter(p=>p.id==='build').at(-1)!.prompt,/Incorrect value/);
  }finally{await f.close();}
+});
+
+test('long streamed reviewer transcript keeps actual tool position after cumulative provider completion',async()=>{
+ const f=await fixture();try{f.mode('long_output');const run=await f.start();const final=await f.finish(run.id);const full='x'.repeat(40000)+'y'.repeat(24001)+'\nCOUNCIL_JSON\n'+JSON.stringify(passing())+'\nEND_COUNCIL_JSON';for(const review of final.steps[3].council!.reviewers){assert.equal(review.status,'completed');assert.equal(review.output,full.slice(-64000));assert.equal(review.toolCalls![0].outputOffset,40000-(full.length-64000));}}finally{await f.close();}
+});
+
+test('hard restart replaces stale running reviewer indicators while preserving completed reports',async()=>{
+ const f=await fixture();try{
+  const created=await f.start();const run=await f.finish(created.id);await f.app.engine.shutdown();
+  run.status='running';run.steps[3].status='running';const evidence=run.steps[3].council!;evidence.status='running';evidence.reviewers[1].status='running';evidence.reviewers[1].output='Partial text survives';evidence.chair!.status='running';f.app.store.saveRun(run);
+  const {Engine}=await import('../src/server/engine.js');const recovered=new Engine(f.app.store,{dataDir:path.join(f.root,'data'),workspaceRoot:path.join(f.root,'work'),host:'127.0.0.1',port:0,cliTimeoutMs:1000,maxOutputBytes:100000},async()=>{throw Error('Must not run automatically');});
+  try{const saved=f.app.store.getRun(run.id)!;assert.equal(saved.status,'interrupted');assert.equal(saved.steps[3].council!.reviewers[0].status,'completed');assert.equal(saved.steps[3].council!.reviewers[1].status,'failed');assert.equal(saved.steps[3].council!.reviewers[1].output,'Partial text survives');assert.equal(saved.steps[3].council!.chair!.status,'failed');}finally{await recovered.shutdown();}
+ }finally{await f.close();}
+});
+
+test('repair reviewer may explicitly resolve its own prior warning without being rejected as an initial hallucination',async()=>{
+ const f=await fixture();try{f.mode('warning');const run=await f.start();await f.finish(run.id);f.mode('resolve');f.app.engine.rework(run.id);const final=await f.finish(run.id);assert.equal(final.status,'waiting_approval');assert.equal(final.steps[3].council!.reviewers[2].report?.resolutions[0].findingId,'F1');}finally{await f.close();}
 });

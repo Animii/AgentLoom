@@ -76,6 +76,8 @@ export function unresolvedCouncilFindings(evidence:CouncilEvidence){
 
 export function retainedTranscript(previous:string,next:string):string{
  if(!previous||next.startsWith(previous))return next;
+ const retainedAt=next.indexOf(previous);
+ if(retainedAt>=0)return previous+next.slice(retainedAt+previous.length);
  if(previous.endsWith(next))return previous;
  return previous+'\n\n'+next;
 }
@@ -181,7 +183,11 @@ export async function runCouncil(
           if (!review.report.findings.some(f => f.id === finding.id && f.severity === 'blocker') && !review.report.resolutions.some(r => r.findingId === finding.id)) throw Error(`Prior blocker ${finding.id} was dropped without counter-evidence.`);
         }
         for (const criterion of prior?.criteria ?? []) if (!review.report.criteria.some(c => c.id === criterion.id)) throw Error(`Prior criterion ${criterion.id} was dropped from the challenge report.`);
-      } else if (!carried.length && review.report.resolutions.length) throw Error('Initial review has no prior findings to resolve.');
+      } else {
+        const known=new Set(carried.map(f=>f.id));
+        for(const attempt of step.history??[])for(const prior of [...(attempt.council?.reviewers??[]),...(attempt.council?.challenge?.reviewers??[])])if(prior.member.id===review.member.id&&prior.status==='completed')for(const finding of prior.report?.findings??[])known.add(finding.id);
+        if(review.report.resolutions.some(r=>!known.has(r.findingId)))throw Error('Initial review has no matching prior finding to resolve.');
+      }
       review.status = 'completed';
     } catch (error) { review.status = 'failed'; review.report = undefined; review.error = error instanceof Error ? error.message.slice(0, 2000) : 'Review failed.'; }
     review.finishedAt = new Date().toISOString(); save(evidence);

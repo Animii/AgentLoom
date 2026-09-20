@@ -95,7 +95,7 @@ export async function publishDraftPr(run:Run,config:AppConfig,input:PublishInput
   await git(cwd,['update-ref',`refs/heads/${branch}`,commit,preview.head]);await git(cwd,['read-tree',preview.tree]);
  }
  // Only push this run's dedicated branch. No force push, merge, or default-branch update.
- const remote=`https://github.com/${repository}.git`, ref=`refs/heads/${branch}:refs/heads/${branch}`;
+ const remote=`https://github.com/${repository}.git`, ref=`${commit}:refs/heads/${branch}`;
  if(transport)await transport.push(cwd,remote,ref);else await git(cwd,['-c','credential.helper=','-c','credential.helper=!gh auth git-credential','push',remote,ref]);
  const folder=await mkdtemp(path.join(tmpdir(),'agentloom-pr-'));
  try{const bodyFile=path.join(folder,'body.md');await writeFile(bodyFile,input.body,'utf8');const output=await gh(['pr','create','--repo',repository,'--head',branch,'--base',run.git!.baseBranch,'--draft','--title',input.title,'--body-file',bodyFile],cwd);return {url:validPrUrl(output.trim(),repository),commit};}finally{await rm(folder,{recursive:true,force:true});}

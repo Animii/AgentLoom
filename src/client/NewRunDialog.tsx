@@ -50,7 +50,8 @@ export default function NewRunDialog({
   const [workflowSelection, setWorkflowSelection] = useState('');
   const [mode, setMode] = useState<RunMode>('live');
   const [delivery,setDelivery]=useState('manual');
-  const automationEligible=mode==='live' && projects.find(p=>p.id===project)?.workspaceMode==='worktree' && !!workflows.find(w=>w.id===workflowSelection)?.steps.at(-1)?.council;
+  const selectedWorkflow=workflows.find(w=>w.id===workflowSelection);
+  const automationEligible=mode==='live' && projects.find(p=>p.id===project)?.workspaceMode==='worktree' && !!selectedWorkflow?.steps[0]?.planning && !!selectedWorkflow.steps.at(-1)?.council && !selectedWorkflow.steps.slice(1,-1).some(s=>s.approval);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addingProject, setAddingProject] = useState(false);
