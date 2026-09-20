@@ -88,7 +88,7 @@ export async function publishDraftPr(run:Run,config:AppConfig,input:PublishInput
   return {url:validPrUrl(pr.url,repository),commit:pr.headRefOid};
  }
  let commit=preview.head;
- if((await git(cwd,['rev-parse','HEAD^{tree}'])).trim()!==preview.tree){
+ if((await git(cwd,['rev-parse',`${preview.head}^{tree}`])).trim()!==preview.tree){
   const user=JSON.parse(await gh(['api','user'],cwd)) as {login:string;id:number};
   if(!/^[a-zA-Z0-9-]+$/.test(user.login)||!Number.isSafeInteger(user.id))throw new Error('Invalid GitHub identity.');
   commit=(await git(cwd,['-c',`user.name=${user.login}`,'-c',`user.email=${user.id}+${user.login}@users.noreply.github.com`,'commit-tree',preview.tree,'-p',preview.head,'-m',input.title])).trim();

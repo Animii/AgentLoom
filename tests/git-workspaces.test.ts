@@ -64,3 +64,14 @@ test('draft PR publishes only reviewed snapshot to run branch; stale previews an
  const retry=await previewRunGit(run,f.config);const recovered=await publishDraftPr(run,f.config,{...input,token:retry.token},transport);assert.equal(recovered.url,result.url);assert.equal(recovered.commit,result.commit);assert.notEqual(recovered.commit,retry.head);assert.equal(pushes,1);
  }finally{await f.close();}
 });
+
+test('committing approved edits during GitHub preflight cannot publish the older preview commit',async()=>{
+ const f=await fixture();try{
+  const run=await f.prepare('preflight');await writeFile(path.join(run.workspace,'app.txt'),'approved\n');const preview=await previewRunGit(run,f.config);run.git!.approvedTree=preview.tree;let pushes=0;
+  await assert.rejects(publishDraftPr(run,f.config,{token:preview.token,title:'Fix',body:''},{gh:async(args)=>{
+   if(args[0]==='auth'){await git(run.workspace,'add','.');await git(run.workspace,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-m','Approved edits committed concurrently');return '';}
+   if(args[1]==='list')return '[]';if(args[0]==='api')return '{"login":"fixture","id":123}';return 'https://github.com/fixture/project/pull/1';
+  },push:async()=>{pushes++;}}),/Git command failed/);
+  assert.equal(pushes,0);assert.equal(await git(run.workspace,'show','HEAD:app.txt'),'approved');
+ }finally{await f.close();}
+});

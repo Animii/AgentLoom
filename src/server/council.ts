@@ -58,7 +58,8 @@ export function councilSummary(evidence: CouncilEvidence): string {
   const chair = evidence.challenge && !evidence.challenge.requested ? evidence.challenge.chair : evidence.chair;
   const label = evidence.status === 'pass' ? 'Ready for your approval' : evidence.status === 'running' ? 'Reviewing' : evidence.status === 'simulated' ? 'Simulated' : 'BLOCKED';
   const findings = councilReviews(evidence).flatMap(r => r.report?.findings.map(f => `- ${r.member.name} / ${f.id} (${f.severity}, ${f.criterion}): ${f.summary}\n  Evidence: ${f.evidence.join('; ')}`) ?? []);
-  findings.push(...unresolvedCouncilFindings(evidence).flatMap(o=>o.findings.map(f=>`- Retained ${o.memberId} / ${f.id} (blocker, ${f.criterion}): ${f.summary}\n  Evidence: ${f.evidence.join('; ')}`)));
+  const shown=new Set(councilReviews(evidence).flatMap(r=>r.report?.findings.filter(f=>f.severity==='blocker').map(f=>`${r.member.id}:${f.id}`)??[]));
+  findings.push(...unresolvedCouncilFindings(evidence).flatMap(o=>o.findings.filter(f=>!shown.has(`${o.memberId}:${f.id}`)).map(f=>`- Retained ${o.memberId} / ${f.id} (blocker, ${f.criterion}): ${f.summary}\n  Evidence: ${f.evidence.join('; ')}`)));
   return `${label}: Council\n\n${chair?.summary ?? 'Three independent reviews, then a chair synthesis. The user makes the final decision.'}\n\n${evidence.issues.map(i => `- ${i}`).join('\n')}\n\n${findings.join('\n')}\n\nSource: ${evidence.source}\nEvidence: ${evidence.bundleHash}\nJev signals are advisory; no majority vote can clear a blocker.`;
 }
 
@@ -74,11 +75,10 @@ export function unresolvedCouncilFindings(evidence:CouncilEvidence){
  }).filter(o=>o.findings.length);
 }
 
-export function retainedTranscript(previous:string,next:string):string{
- if(!previous||next.startsWith(previous))return next;
- const retainedAt=next.indexOf(previous);
- if(retainedAt>=0)return previous+next.slice(retainedAt+previous.length);
- if(previous.endsWith(next))return previous;
+export function retainedTranscript(previous:string,next:string,discarded=0):string{
+ if(!previous)return next;
+ if(next.slice(discarded,discarded+previous.length)===previous)return next.slice(discarded);
+ if(previous.endsWith(next)||(discarded>0&&next.endsWith(previous)))return previous;
  return previous+'\n\n'+next;
 }
 
@@ -124,12 +124,15 @@ export async function runCouncil(
   const reviews = councilReviews(evidence);
   save(evidence);
   let progressTimer: ReturnType<typeof setTimeout> | undefined;
+  const discardedText=new WeakMap<object,number>();
   const progress = (target: {output?:string;toolCalls?:import('../shared/types.js').PlanningToolCall[]}, incoming:AgentEvent) => {
     if (signal.aborted) return;
     if (incoming.type === 'output') {
-      const output = incoming.replace ? retainedTranscript(target.output??'',incoming.message) : (target.output ?? '') + incoming.message;
+      const discarded=discardedText.get(target)??0;
+      const output = incoming.replace ? retainedTranscript(target.output??'',incoming.message,discarded) : (target.output ?? '') + incoming.message;
       const removed = Math.max(0, output.length - 64000);
       target.output = output.slice(-64000);
+      discardedText.set(target,discarded+removed);
       if (removed) for (const call of target.toolCalls ?? []) call.outputOffset = Math.max(0, (call.outputOffset ?? 0) - removed);
     } else if (incoming.type === 'tool' && incoming.toolCall) {
       const calls = target.toolCalls ??= [];
@@ -186,7 +189,10 @@ export async function runCouncil(
       } else {
         const known=new Set(carried.map(f=>f.id));
         for(const attempt of step.history??[])for(const prior of [...(attempt.council?.reviewers??[]),...(attempt.council?.challenge?.reviewers??[])])if(prior.member.id===review.member.id&&prior.status==='completed')for(const finding of prior.report?.findings??[])known.add(finding.id);
-        if(review.report.resolutions.some(r=>!known.has(r.findingId)))throw Error('Initial review has no matching prior finding to resolve.');
+        if(!step.history?.some(h=>h.council)&&review.report.resolutions.some(r=>!known.has(r.findingId)))throw Error('Initial review has no matching prior finding to resolve.');
+        // Repair feedback contains every member's findings. Extra cross-member
+        // resolutions have no authority over this member's obligations.
+        review.report.resolutions=review.report.resolutions.filter(r=>known.has(r.findingId));
       }
       review.status = 'completed';
     } catch (error) { review.status = 'failed'; review.report = undefined; review.error = error instanceof Error ? error.message.slice(0, 2000) : 'Review failed.'; }

@@ -14,8 +14,10 @@ const blocked = () => ({ ...passing(), verdict: 'BLOCKED', summary: 'The value i
 
 test('repeated cumulative completion does not truncate retained transcript and tool offsets twice',()=>{
  const full='discarded prefix'+'x'.repeat(63980)+' tool boundary text!';const retained=full.slice(-64000);
- assert.equal(retainedTranscript(retained,full),retained);
- assert.equal(retainedTranscript(retained,full+'new suffix'),retained+'new suffix');
+ assert.equal(retainedTranscript(retained,full,full.length-64000),retained);
+ assert.equal(retainedTranscript(retained,full+'new suffix',full.length-64000),retained+'new suffix');
+ assert.equal(retainedTranscript('x'.repeat(64000),'x'.repeat(64001),1),'x'.repeat(64000));
+ assert.equal(retainedTranscript('x'.repeat(64000),'x'.repeat(64002),1),'x'.repeat(64001));
  assert.equal(retainedTranscript('Inspection text','Final report'),'Inspection text\n\nFinal report');
 });
 
@@ -31,8 +33,8 @@ async function fixture() {
       if (step.id === 'plan') return { output: 'AC1: app.txt must contain fixed. Run the configured check.\n\nPLAN_READY', sessionId: null, costUsd: null };
       if (step.id === 'build') { await writeFile(path.join(workspace, 'app.txt'), fixed ? 'fixed' : 'broken'); return { output: 'Implementation done.', sessionId: null, costUsd: null }; }
       if (step.id === 'council-chair') return { output: JSON.stringify({ summary: 'Checked all reports against AC1.', disputes: mode === 'dispute' ? ['AC1 evidence contradicts the product claim.'] : [] }), sessionId: null, costUsd: 0.01 };
-      if(mode==='long_output'){
-        const first='x'.repeat(40000);const last='y'.repeat(24001)+'\nCOUNCIL_JSON\n'+JSON.stringify(passing())+'\nEND_COUNCIL_JSON';
+      if(['long_output','repeated_output'].includes(mode)){
+        const first='x'.repeat(mode==='repeated_output'?50000:40000);const last=(mode==='repeated_output'?'x'.repeat(30000):'y'.repeat(24001))+'\nCOUNCIL_JSON\n'+JSON.stringify(passing())+'\nEND_COUNCIL_JSON';
         onEvent({type:'output',message:first});onEvent({type:'tool',message:'read',toolCall:{id:'long-tool',name:'read',status:'completed',input:{},startedAt:new Date().toISOString()}});onEvent({type:'output',message:last});
         return {output:first+last,sessionId:null,costUsd:null};
       }
@@ -47,7 +49,7 @@ async function fixture() {
       const report = ['block','partial_initial','partial_challenge'].includes(mode) && step.id === 'council-adversarial' ? blocked() : passing();
       if(mode==='warning'&&step.id==='council-adversarial')Object.assign(report,{findings:[{...blocked().findings[0],severity:'warning'}]});
       if(mode==='partial_challenge'&&step.id==='council-adversarial')Object.assign(report,{findings:[{...blocked().findings[0],id:'F2',summary:'New challenge blocker'}],resolutions:[{findingId:'F1',evidence:'F1 refuted; a different defect F2 remains.'}]});
-      if ((challenge || prompt.includes('Prior findings requiring verification')) && mode === 'resolve' && step.id === 'council-adversarial') Object.assign(report, { resolutions: [{ findingId: 'F1', evidence: 'Read app.txt:1; value is fixed and the recorded check proves it. Earlier complaint was incorrect.' }] });
+      if ((challenge || prompt.includes('Prior findings requiring verification')) && ['resolve','resolve_peers'].includes(mode) && step.id === 'council-adversarial') Object.assign(report, { resolutions: [{ findingId: 'F1', evidence: 'Read app.txt:1; value is fixed and the recorded check proves it. Earlier complaint was incorrect.' },...(mode==='resolve_peers'?[{findingId:'PEER1',evidence:'Also checked a peer finding from repair feedback.'}]:[])] });
       return { output: JSON.stringify(report), sessionId: null, costUsd: 0.01 };
     },
   });
@@ -203,6 +205,10 @@ test('long streamed reviewer transcript keeps actual tool position after cumulat
  const f=await fixture();try{f.mode('long_output');const run=await f.start();const final=await f.finish(run.id);const full='x'.repeat(40000)+'y'.repeat(24001)+'\nCOUNCIL_JSON\n'+JSON.stringify(passing())+'\nEND_COUNCIL_JSON';for(const review of final.steps[3].council!.reviewers){assert.equal(review.status,'completed');assert.equal(review.output,full.slice(-64000));assert.equal(review.toolCalls![0].outputOffset,40000-(full.length-64000));}}finally{await f.close();}
 });
 
+test('repeated streamed content uses absolute discarded length when cumulative completion arrives',async()=>{
+ const f=await fixture();try{f.mode('repeated_output');const run=await f.start();const final=await f.finish(run.id);const full='x'.repeat(80000)+'\nCOUNCIL_JSON\n'+JSON.stringify(passing())+'\nEND_COUNCIL_JSON';for(const review of final.steps[3].council!.reviewers){assert.equal(review.status,'completed');assert.equal(review.output,full.slice(-64000));assert.equal(review.toolCalls![0].outputOffset,50000-(full.length-64000));}}finally{await f.close();}
+});
+
 test('hard restart replaces stale running reviewer indicators while preserving completed reports',async()=>{
  const f=await fixture();try{
   const created=await f.start();const run=await f.finish(created.id);await f.app.engine.shutdown();
@@ -214,4 +220,8 @@ test('hard restart replaces stale running reviewer indicators while preserving c
 
 test('repair reviewer may explicitly resolve its own prior warning without being rejected as an initial hallucination',async()=>{
  const f=await fixture();try{f.mode('warning');const run=await f.start();await f.finish(run.id);f.mode('resolve');f.app.engine.rework(run.id);const final=await f.finish(run.id);assert.equal(final.status,'waiting_approval');assert.equal(final.steps[3].council!.reviewers[2].report?.resolutions[0].findingId,'F1');}finally{await f.close();}
+});
+
+test('cross-member resolution extras cannot clear own obligations and do not discard a valid repair report',async()=>{
+ const f=await fixture();try{f.mode('block');const run=await f.start();await f.finish(run.id);f.mode('resolve_peers');f.app.engine.rework(run.id);const final=await f.finish(run.id);assert.equal(final.status,'waiting_approval');assert.deepEqual(final.steps[3].council!.reviewers[2].report?.resolutions.map(r=>r.findingId),['F1']);}finally{await f.close();}
 });

@@ -17,6 +17,7 @@ export class Automation {
  async close(){this.closed=true;clearInterval(this.timer);await Promise.allSettled(this.busy.values());}
  pause(id:string,message='Automation paused. Current agent work may finish; no next decision will be applied.'){
   const run=this.store.getRun(id);if(!run?.automation)return;
+  if(run.git?.prUrl)return;
   if(run.automation.status==='publishing')throw Error('Publication is already in progress.');
   run.automation.status='paused';run.automation.message=message;this.store.saveRun(run);
  }
@@ -45,6 +46,7 @@ export class Automation {
   const step=run.steps[run.currentStep];
   if(!['blocked','waiting_approval'].includes(run.status)||!step?.council)throw Error('This step needs your input or recovery.');
   const evidence=step.council;
+  const reviewsComplete=councilReviews(evidence).length===3&&councilReviews(evidence).every(r=>r.status==='completed'&&!!r.report)&&(evidence.challenge?.chair??evidence.chair)?.status==='completed';
   const state={authorization:{contractHash:policy.contractHash,controllerMayComplete:true,maxRepairs:policy.maxRepairs,repairsUsed:policy.repairsUsed},task:run.task,plan:run.steps[0].output,validation:run.steps.filter(s=>s.validation).map(s=>({stepId:s.definition.id,attempt:s.attempt,status:s.validation!.status,before:s.validation!.before,after:s.validation!.after,signals:s.validation!.signals,commands:s.validation!.commands.map(c=>({command:c.command,status:c.status,exitCode:c.exitCode,outputTail:c.output.slice(c.status==='passed'?-500:-2000),fullOutputRecorded:true}))})),council:{status:evidence.status,source:evidence.source,issues:evidence.issues,reviews:councilReviews(evidence).map(r=>({status:r.status,report:r.report})),chair:(()=>{const chair=evidence.challenge?.chair??evidence.chair;return chair?{status:chair.status,summary:chair.summary,disputes:chair.disputes}:undefined;})()}};
   if(JSON.stringify(state).length>30000)throw Error('Evidence exceeds the routing budget. Review this outcome manually.');
   policy.status='deciding';policy.message='Jev is assessing the recorded evidence.';this.store.saveRun(run);
@@ -58,7 +60,7 @@ export class Automation {
   run.automation!.decisions.push(decision);
   run.automation!.status='paused';
   if(answer.confidence<0.6)decision.reason='Low routing confidence; review the evidence.';
-  else if(answer.choice==='return_to_implementer' && policy.repairsUsed<policy.maxRepairs && councilReviews(evidence).some(r=>r.report?.findings.some(f=>f.severity==='blocker'))){decision.action='repair';decision.reason='Returning concrete findings within the approved scope.';}
+  else if(answer.choice==='return_to_implementer' && reviewsComplete && policy.repairsUsed<policy.maxRepairs && councilReviews(evidence).some(r=>r.report?.findings.some(f=>f.severity==='blocker'))){decision.action='repair';decision.reason='Returning concrete findings within the approved scope.';}
   else if(answer.choice==='complete' && run.status==='waiting_approval' && evidence.status==='pass'){decision.action='complete';decision.reason='Evidence supports completion, subject to source freshness checks.';}
   else decision.reason='Clarification, missing evidence, or repair limit requires your attention.';
   run.automation!.message=decision.reason;this.store.saveRun(run);

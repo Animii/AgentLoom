@@ -235,4 +235,6 @@ For a live Git-worktree project using an approved-plan workflow with a final out
 
 The PR-machine panel shows policy, repair count and recorded routing decisions. Low confidence, missing evidence or a product decision pauses automation. **Pause automation** lets current work finish without applying the next decision. Manual messages and run actions take control; **Resume automation** restores routing when the run is ready. A server restart pauses automation and preserves run history. Recover an interrupted step first, then resume.
 
+Routing receives recorded validation status and the last 500 characters of passing command output, or 2,000 for failed commands. Full logs remain in the run. Evidence exceeding the 30,000-character routing budget pauses for manual review rather than silently dropping criteria or reports.
+
 **Repeat validation and review** preserves history and reruns the existing command contract and council without another implementation attempt. Inspect the new results before resuming automation. Publication failures offer **Retry publication**, which retries GitHub without rerunning agents. Final approval binds the exact Git tree; changed files must be revalidated and approved. Publication creates a draft on the run's dedicated branch and never merges it. GitHub authentication must be available through `gh` in the platform container.

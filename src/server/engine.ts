@@ -497,8 +497,10 @@ export class Engine {
       const prepared = this.requireRun(runId);
       if (!prepared.sourceBaseline && prepared.steps.some(s=>s.definition.council) && prepared.steps.every(s=>s.attempt===0)) {
         const files = await readSourceSnapshot(workspace);
-        prepared.sourceBaseline = {fingerprint:snapshotFingerprint(files),files:files.map(file=>({path:file.relative,hash:createHash('sha256').update(file.content).digest('hex')}))};
-        this.persist(prepared);
+        const latest=this.requireRun(runId);
+        if(signal.aborted||latest.status!=='running')return;
+        latest.sourceBaseline = {fingerprint:snapshotFingerprint(files),files:files.map(file=>({path:file.relative,hash:createHash('sha256').update(file.content).digest('hex')}))};
+        this.persist(latest);
       }
       await this.runSteps(runId, workspace, signal);
     } catch (error) {
@@ -634,6 +636,12 @@ export class Engine {
         try { await this.assertValidationCurrent(runId); }
         catch(error) { result.output += `\n\nBLOCKED: ${errorMessage(error)} Re-run implementation/validation before approval.`; currentStep.output=result.output; }
       }
+      // Freshness checks await filesystem work. Preserve takeover/cancellation that
+      // arrived while those checks were running instead of saving the old policy.
+      const afterChecks=this.store.getRun(runId);
+      if(signal.aborted || !afterChecks || afterChecks.status!=='running' || afterChecks.currentStep!==current.currentStep)return;
+      current.automation=afterChecks.automation;
+      current.git=afterChecks.git;
       if (currentStep.conversation) {
         currentStep.conversation.push(message('assistant', result.output));
         checkConversation(currentStep);
