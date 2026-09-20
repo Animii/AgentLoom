@@ -10,7 +10,7 @@ import {createApp} from '../src/server/app.js';
 import {councilWorkflow} from '../src/server/templates.js';
 import type {Run} from '../src/shared/types.js';
 const exec=promisify(execFile);
-async function fixture(options:{repair?:boolean;alwaysBroken?:boolean;confidence?:number;publishFails?:boolean;failReview?:boolean;beforeDecision?:()=>Promise<void>}={}){
+async function fixture(options:{repair?:boolean;alwaysBroken?:boolean;confidence?:number;publishFails?:boolean;failReview?:boolean;missingEvidence?:boolean;beforeDecision?:()=>Promise<void>}={}){
  const root=await mkdtemp(path.join(tmpdir(),'loom-auto-'));const source=path.join(root,'projects','fixture');await mkdir(source,{recursive:true});
  const git=(args:string[])=>exec('git',args,{cwd:source,windowsHide:true});
  await git(['init','-b','main']);await git(['config','user.name','Fixture']);await git(['config','user.email','fixture@example.invalid']);await writeFile(path.join(source,'app.txt'),'original');await git(['add','.']);await git(['commit','-m','Initial']);await git(['remote','add','origin','https://github.com/fixture/project.git']);
@@ -23,6 +23,7 @@ async function fixture(options:{repair?:boolean;alwaysBroken?:boolean;confidence
    if(step.id==='build'){builds++;await writeFile(path.join(workspace,'app.txt'),options.alwaysBroken||options.repair&&builds===1?'broken':'fixed');return {output:'Implementation ready.',sessionId:null,costUsd:null};}
    if(step.id==='council-chair')return {output:JSON.stringify({summary:'Reviewed reports.',disputes:[]}),sessionId:null,costUsd:null};
    if(options.failReview&&step.id==='council-product')throw Error('Required provider unavailable');
+   if(options.missingEvidence&&step.id==='council-product')return {output:JSON.stringify({verdict:'NEEDS_EVIDENCE',summary:'Required observation unavailable.',criteria:[{id:'AC1',status:'unknown',evidence:['No usable observation.']}],findings:[],resolutions:[]}),sessionId:null,costUsd:null};
    const broken=options.alwaysBroken||options.repair&&builds===1;
    return {output:JSON.stringify({verdict:broken?'BLOCKED':'PASS',summary:broken?'Value is wrong.':'Value verified.',criteria:[{id:'AC1',status:broken?'unmet':'met',evidence:['app.txt:1 and recorded check']}],findings:broken?[{id:'F1',criterion:'AC1',severity:'blocker',summary:'Set the value to fixed.',evidence:['app.txt:1 is broken']}]:[],resolutions:builds>1?[{findingId:'F1',evidence:'app.txt is fixed; recorded assertion passes.'}]:[]}),sessionId:null,costUsd:null};
   }});
@@ -52,8 +53,8 @@ test('pausing during final filesystem freshness checks survives step completion'
  try{await f.wait(r=>r.status==='waiting_approval');await f.app.engine.approveCurrent(f.run.id);await checking;assert.equal((await f.app.inject({method:'POST',url:`/api/runs/${f.run.id}/automation/pause`,payload:{}})).statusCode,200);release();const run=await f.wait(r=>r.currentStep===3&&r.status==='waiting_approval');assert.equal(run.automation?.status,'paused');await delay(1200);assert.equal(f.publishes(),0);assert.equal(f.app.store.getRun(run.id)?.automation?.status,'paused');}finally{release();await f.close();}
 });
 
-test('confident repair cannot bypass a missing required reviewer',async()=>{
- const f=await fixture({alwaysBroken:true,failReview:true});try{await f.wait(r=>r.status==='waiting_approval');await f.app.engine.approveCurrent(f.run.id);const paused=await f.wait(r=>r.automation?.status==='paused');assert.equal(paused.automation!.decisions[0].choice,'return_to_implementer');assert.equal(paused.automation!.repairsUsed,0);assert.equal(f.builds(),1);assert.equal(f.publishes(),0);}finally{await f.close();}
+for(const missingEvidence of [true,false])test(`confident repair cannot bypass ${missingEvidence?'explicitly missing evidence':'a missing required reviewer'}`,async()=>{
+ const f=await fixture({alwaysBroken:true,failReview:!missingEvidence,missingEvidence});try{await f.wait(r=>r.status==='waiting_approval');await f.app.engine.approveCurrent(f.run.id);const paused=await f.wait(r=>r.automation?.status==='paused');assert.equal(paused.automation!.decisions[0].choice,'return_to_implementer');assert.equal(paused.automation!.repairsUsed,0);assert.equal(f.builds(),1);assert.equal(f.publishes(),0);}finally{await f.close();}
 });
 
 for(const takeover of [true,false])test(takeover?'manual takeover invalidates an in-flight Jev decision':'concurrent run update pauses instead of leaving routing stuck',async()=>{
@@ -70,4 +71,9 @@ test('server restart pauses authorized automation without rerunning agents',asyn
   const restarted=await createApp({dataDir:path.join(f.root,'data'),workspaceRoot:path.join(f.root,'work'),projectRoot:path.join(f.root,'projects'),host:'127.0.0.1',port:0,cliTimeoutMs:1000,maxOutputBytes:100000},{serveStatic:false,execute:async()=>{throw Error('Restart must not execute agents');}});
   try{const saved=restarted.store.getRun(f.run.id)!;assert.equal(saved.automation!.status,'paused');assert.match(saved.automation!.message,/Server restarted/);assert.equal(saved.status,'waiting_approval');}finally{await restarted.close();}
  }finally{await f.close();}
+});
+
+test('source edited while Jev is deciding cannot trigger a stale automatic repair',async()=>{
+ let entered!:()=>void,release!:()=>void;const checking=new Promise<void>(resolve=>{entered=resolve;});const gate=new Promise<void>(resolve=>{release=resolve;});const f=await fixture({alwaysBroken:true,beforeDecision:async()=>{entered();await gate;}});
+ try{await f.wait(r=>r.status==='waiting_approval');await f.app.engine.approveCurrent(f.run.id);await checking;await writeFile(path.join(f.app.store.getRun(f.run.id)!.workspace,'app.txt'),'user changed source');release();const paused=await f.wait(r=>r.automation?.status==='paused');assert.match(paused.automation!.message,/Source changed after review/);assert.equal(paused.automation!.repairsUsed,0);assert.equal(f.builds(),1);assert.equal(f.publishes(),0);}finally{release();await f.close();}
 });
