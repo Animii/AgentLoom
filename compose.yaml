@@ -1,0 +1,38 @@
+﻿name: agentloom
+services:
+  platform:
+    build: .
+    init: true
+    # Allow Codex to create its inner bubblewrap sandbox as the non-root user.
+    # No privileged mode or added Linux capabilities are needed.
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
+    ports:
+      - "127.0.0.1:${PORT:-4317}:4317"
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      TYPESAFE_API_KEY: ${TYPESAFE_API_KEY:-}
+      CLI_TIMEOUT_MS: ${CLI_TIMEOUT_MS:-3600000}
+      CLI_IDLE_TIMEOUT_MS: ${CLI_IDLE_TIMEOUT_MS:-600000}
+      PROJECTS_ROOT: /host-projects
+      PROJECTS_HOST_ROOT: ${PROJECTS_FOLDER:-..}
+    group_add:
+      - "0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - data:/data
+      - agent_home:/home/node
+      - ${WORKSPACE_ROOT:-./workspaces}:/workspaces
+      - type: bind
+        source: ${PROJECTS_FOLDER:-..}
+        target: /host-projects
+        bind:
+          create_host_path: false
+    restart: unless-stopped
+    stop_grace_period: 20s
+volumes:
+  data:
+  agent_home:

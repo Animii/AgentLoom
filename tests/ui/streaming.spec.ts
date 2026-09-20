@@ -1,0 +1,121 @@
+import {test,expect} from '@playwright/test';
+import {mkdtemp,mkdir,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+
+test('live stream shows partial reply and ask choices survive reload with editable free text',async({page})=>{
+ const root=await mkdtemp(path.join(tmpdir(),'loom-stream-ui-'));await mkdir(path.join(root,'work/projects/welcome'),{recursive:true});
+ const {createApp}=await import(pathToFileURL(path.resolve('dist/server/app.js')).href);let calls=0;
+ const app=await createApp({dataDir:path.join(root,'data'),workspaceRoot:path.join(root,'work'),host:'127.0.0.1',port:0,cliTimeoutMs:10000,maxOutputBytes:10000},{execute:async(_s:unknown,_p:unknown,_w:unknown,signal:AbortSignal,event:(e:unknown)=>void)=>{
+  calls++;if(calls===1){event({type:'tool',message:'Read project',toolCall:{id:'read-1',name:'read_project_file',status:'running',input:{path:'src/main.ts',startLine:1},startedAt:new Date().toISOString()}});event({type:'output',message:'Let me understand your goal'});await new Promise(r=>setTimeout(r,2500));if(signal.aborted)throw Error('Aborted');event({type:'output',message:' before making a plan.'});event({type:'tool',message:'Read completed',toolCall:{id:'read-1',name:'read_project_file',status:'completed',input:{path:'src/main.ts',startLine:1},startedAt:new Date().toISOString(),finishedAt:new Date().toISOString(),summary:'3 lines read'}});event({type:'ask',message:'Ask',questions:[{question:'Who will use this?',header:'Audience',options:[{label:'Developers',description:'Optimize local development.',recommended:true},'Players']},{question:'What constraints matter?',multiSelect:true,options:['Keyboard access','Offline support']},{question:'Before we agree on the plan, please describe the repository constraints, workspace selection, retry and resume behavior, existing Git helpers, and Docker Compose workspace mounts. Include any other context needed to specify the affected interfaces and acceptance criteria.'}]});return {output:'PLAN_QUESTIONS',sessionId:null,costUsd:null};}
+  event({type:'output',message:'I will include your answer.'});await new Promise(r=>setTimeout(r,500));return {output:'A keyboard-accessible plan for developers.\nPLAN_READY',sessionId:null,costUsd:null};
+ }});
+ try{
+  const address=await app.listen({port:0,host:'127.0.0.1'});const run=await app.engine.create({title:'Streaming question test',task:'Plan a dashboard',project:'welcome',workflowId:'review-build',mode:'live'});
+  await page.goto(address);await page.getByRole('button').filter({hasText:'Streaming question test'}).first().click();
+  await expect(page.locator('.chat-partial')).toContainText('Let me understand your goal');await expect(page.locator('.detail-status .status-running')).toBeVisible();
+  await expect(page.locator('.chat-tool-call').filter({hasText:'Read project file'})).toContainText('Running');
+  await expect(page.getByRole('button',{name:/Developers/})).toBeEnabled();
+  await expect(page.locator('.chat-tool-call').filter({hasText:'Read project file'})).toContainText('Completed');
+  await page.locator('.tool-call-group > summary').first().click();
+  await page.locator('.chat-tool-call').filter({hasText:'Read project file'}).locator('summary').click();
+  await expect(page.locator('.chat-tool-call').filter({hasText:'Read project file'}).locator('.tool-call-details')).toContainText('src/main.ts');
+  await expect(page.locator('.chat-tool-call').filter({hasText:'Read project file'}).locator('.tool-call-details')).toContainText('3 lines read');
+  await expect(page.locator('.chat-messages')).toContainText('Let me understand your goal before making a plan.');
+  await expect(page.getByRole('button',{name:'Approve plan and continue'})).toHaveCount(0);
+  await page.screenshot({path:'artifacts/ask-choices-desktop.png',fullPage:true});
+  await page.getByRole('heading',{name:'Who will use this?'}).focus();
+  await page.keyboard.press('1');
+  const panel=page.getByRole('region',{name:'Planner questions'});
+  await expect(panel).toContainText('Question 2 of 3');
+  await page.getByRole('button',{name:/Keyboard access/}).click();
+  await page.getByRole('button',{name:/Offline support/}).click();
+  await expect(panel).toContainText('Question 2 of 3');
+  await page.getByRole('button',{name:'Next question'}).click();
+  await expect(page.getByRole('button',{name:'Submit answers'})).toBeDisabled();
+  expect(await page.locator('.chat-dock').evaluate(el=>el.scrollHeight<=el.clientHeight+1)).toBe(true);
+  await page.getByLabel('Your answer',{exact:true}).fill('Full keyboard access is required.');
+  await page.reload();await expect(page.locator('.detail-title')).toHaveText('Streaming question test');
+  await expect(page.locator('.chat-tool-call').filter({hasText:'Read project file'})).toHaveCount(1);
+  await expect(page.locator('.chat-tool-call').filter({hasText:'Read project file'})).toContainText('Completed');
+  await expect(page.getByRole('button',{name:/Developers/})).toHaveAttribute('aria-pressed','true');
+  await page.getByRole('button',{name:'Write my own answer'}).click();
+  await page.getByLabel('Your answer',{exact:true}).fill('Maintainers');
+  await page.getByRole('button',{name:'Next question'}).click();
+  await expect(page.getByRole('button',{name:/Keyboard access/})).toHaveAttribute('aria-pressed','true');
+  await expect(page.getByRole('button',{name:/Offline support/})).toHaveAttribute('aria-pressed','true');
+  await page.getByRole('button',{name:'Next question'}).click();
+  await expect(page.getByLabel('Your answer',{exact:true})).toHaveValue('Full keyboard access is required.');
+  await page.getByRole('button',{name:'Back',exact:true}).click();
+  await page.getByRole('button',{name:'Back',exact:true}).click();
+  await expect(page.getByLabel('Your answer',{exact:true})).toHaveValue('Maintainers');
+  await page.getByRole('button',{name:'Next question'}).click();
+  await page.getByRole('button',{name:'Next question'}).click();
+  expect(calls).toBe(1);
+  await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  expect(await page.locator('.chat-dock').evaluate(el=>el.scrollHeight<=el.clientHeight+1)).toBe(true);
+  const questionBounds=await panel.boundingBox();
+  const submitBounds=await page.getByRole('button',{name:'Submit answers'}).boundingBox();
+  expect(submitBounds!.y+submitBounds!.height).toBeLessThan(questionBounds!.y+questionBounds!.height);
+  await page.screenshot({path:'artifacts/ask-cards-mobile.png',fullPage:true});
+  await page.route(`**/api/runs/${run.id}/messages`,async route=>{await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Temporary connection problem'})});await page.unroute(`**/api/runs/${run.id}/messages`);});
+  await page.getByRole('button',{name:'Submit answers'}).click();
+  await expect(page.getByRole('alert')).toContainText('Temporary connection problem');
+  await expect(page.getByLabel('Your answer',{exact:true})).toHaveValue('Full keyboard access is required.');
+  await page.getByRole('button',{name:'Submit answers'}).click();await expect(page.getByRole('button',{name:'Approve plan and continue'})).toBeVisible();
+  await expect(panel).toHaveCount(0);
+  expect(await page.evaluate(()=>Object.keys(sessionStorage).filter(key=>key.startsWith('agentloom-ask-')))).toEqual([]);
+  const saved=app.store.getRun(run.id);expect(saved.steps[0].conversation.at(-2).content).toContain('keyboard access');expect(saved.steps[0].conversation.at(-2).content).toContain('Maintainers');expect(saved.steps[0].conversation.at(-2).content).toContain('Keyboard access, Offline support');expect(saved.steps[1].attempt).toBe(0);
+ }finally{await page.goto('about:blank');app.server.closeAllConnections();await app.close();await rm(root,{recursive:true,force:true});}
+});
+
+test('chat keeps a stable reply, follows streaming only at the bottom and allows drafting',async({page})=>{
+ const root=await mkdtemp(path.join(tmpdir(),'loom-chat-ui-'));await mkdir(path.join(root,'work/projects/welcome'),{recursive:true});
+ const {createApp}=await import(pathToFileURL(path.resolve('dist/server/app.js')).href);
+ let emit:(e:unknown)=>void=()=>{};let finish:()=>void=()=>{};let result='';let calls=0;
+ const app=await createApp({dataDir:path.join(root,'data'),workspaceRoot:path.join(root,'work'),host:'127.0.0.1',port:0,cliTimeoutMs:30000,maxOutputBytes:50000},{execute:async(_s:unknown,_p:unknown,_w:unknown,_signal:AbortSignal,event:(e:unknown)=>void)=>{
+  calls++;emit=event;
+  if(calls===1) await new Promise<void>(resolve=>{finish=resolve;});
+  return {output:result+'\nPLAN_READY',sessionId:null,costUsd:null};
+ }});
+ try {
+  const address=await app.listen({port:0,host:'127.0.0.1'});
+  await app.engine.create({title:'Smooth conversation',task:'Create a clear implementation plan.',project:'welcome',workflowId:'review-build',mode:'live'});
+  await page.goto(address);await page.getByRole('button').filter({hasText:'Smooth conversation'}).first().click();
+  await expect(page.locator('.chat-thinking')).toBeVisible();
+  const reply=await page.locator('.chat-partial').elementHandle();
+  const input=page.getByLabel('Message the planner');await input.fill('Keep the scope small.');await input.press('Shift+Enter');await input.press('a');
+  await expect(input).toHaveValue('Keep the scope small.\na');await expect(page.getByRole('button',{name:'Send message',exact:true})).toBeDisabled();
+  const table='\n\n| Area | Location | Relevant behavior |\n| --- | --- | --- |\n| Tool schema | `src/server/ask-tool.ts` | **Structured choices** |\n| Question card | `src/client/PlanningQuestions.tsx` | Custom answers |';
+  result=Array.from({length:35},(_,i)=>`### Step ${i+1}\nExplain the implementation and how to verify it.`).join('\n\n')+table;
+  emit({type:'output',message:result});
+  await expect(page.locator('.chat-partial')).toContainText('Step 35');
+  await expect(page.locator('.chat-partial table')).toHaveCount(1);
+  await expect(page.locator('.chat-partial th')).toHaveCount(3);
+  await expect(page.locator('.chat-partial td code').first()).toHaveText('src/server/ask-tool.ts');
+  const history=page.locator('.chat-scroll');
+  await expect.poll(()=>history.evaluate(el=>el.scrollHeight-el.scrollTop-el.clientHeight)).toBeLessThan(75);
+  await history.evaluate(el=>{el.scrollTop=0;el.dispatchEvent(new Event('scroll',{bubbles:true}));});
+  await expect(page.getByRole('button',{name:/Jump to latest/})).toBeVisible();
+  result+='\n\n### Last check\nVerify the agreed scope.';emit({type:'output',message:'\n\n### Last check\nVerify the agreed scope.\nPLAN_RE'});
+  await expect(page.locator('.chat-partial')).toContainText('Last check');
+  await expect(page.locator('.chat-partial')).not.toContainText('PLAN_RE');
+  expect(await history.evaluate(el=>el.scrollTop)).toBeLessThan(10);
+  await page.getByRole('button',{name:/Jump to latest/}).click();
+  await expect.poll(()=>history.evaluate(el=>el.scrollHeight-el.scrollTop-el.clientHeight)).toBeLessThan(75);
+  finish();await expect(page.getByRole('button',{name:'Approve plan and continue'})).toBeVisible();
+  expect(await reply!.evaluate(el=>el.isConnected)).toBe(true);
+  await expect(page.locator('.chat-assistant')).toHaveCount(1);
+  await expect(page.locator('.chat-assistant table')).toHaveCount(1);
+  await expect(input).toHaveValue('Keep the scope small.\na');
+  await page.screenshot({path:'artifacts/chat-desktop.png',fullPage:true});
+  await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:'artifacts/chat-mobile.png',fullPage:true});
+  await page.locator('.markdown-table-scroll').scrollIntoViewIfNeeded();
+  await page.screenshot({path:'artifacts/markdown-table-mobile.png',fullPage:true});
+  expect(await page.locator('.markdown-table-scroll').evaluate(el=>el.scrollWidth>el.clientWidth)).toBe(true);
+  await input.fill('Please add accessibility checks.');await input.press('Enter');
+  await expect(input).toHaveValue('');await expect.poll(()=>calls).toBe(2);
+ } finally { finish();await page.goto('about:blank');app.server.closeAllConnections();await app.close();await rm(root,{recursive:true,force:true}); }
+});

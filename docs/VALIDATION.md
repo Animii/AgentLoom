@@ -1,0 +1,89 @@
+﻿# AgentLoom acceptance record
+
+Validation performed locally on 19 September 2026, using Docker Desktop Linux containers and the platform at http://localhost:4317.
+
+## Automated platform checks
+
+- TypeScript strict typecheck passed.
+- Production build passed locally and in Docker.
+- 32 Node tests passed: engine state transitions, approval blocking, revisions, BLOCKED handling, failure/retry, cancellation, interrupted-run recovery, two-run concurrency, immutable workflow snapshots, workspace exclusions/path/symlink boundaries, strict HTTP validation, local Host/Origin restrictions, actual HTTP responses, provider stream parsing and real subprocess handling.
+- Process checks cover Unicode, literal multiline arguments, explicit working directory, max effort, denied shell permissions, empty/malformed/error/truncated output, output cap, timeout and cancellation.
+- All 4 browser tests passed against the real Compose service: four-step gated demo with revision/activity/files, automatic review, cancellation, workflow save/reload, provider discovery, 390px layout, and a failed workspace recovered with the Retry button.
+- Docker healthcheck passed. Three installed CLIs were verified: Claude Code 2.1.277, Codex 0.155.1, OpenCode 1.18.31.
+
+## Real provider checks
+
+These used actual authenticated CLI processes inside Docker, not mocked responses:
+
+- Claude / `claude-fable-5-1`: read the starter workspace and produced design criteria.
+- Codex / CLI default: read README.md and returned a correct project summary after the container sandbox configuration was corrected.
+- OpenCode / `deepseek/deepseek-flash`, **max**: wrote `pilot-result.json` exactly as specified and read it back. The product owner separately fetched and compared the file contents before approving.
+
+The initial Codex attempt could not start its bubblewrap sandbox. Compose now permits inner namespace creation without privileged mode or additional capabilities. The initial OpenCode attempt used inherited `/app` context; the adapter now supplies `--dir` and `PWD` explicitly. Both original results were held for review, revised after the fixes, and only approved once the real operations succeeded.
+
+## Complete live delivery pilot
+
+The **Unicode slug utility** run completed all four real stages: Codex plan, Claude design, Flash implementation at max effort, and Codex review. The product owner reviewed and approved every handoff. A design revision made the seventh test mandatory and corrected documentation wording; a review revision clarified that Git history is deliberately absent from run copies.
+
+Flash created exactly the approved utility, seven tests and README update. All seven tests passed both on the host and through `docker compose exec`. The product owner independently checked additional edge cases and 200 deterministic Unicode inputs for valid output, length and idempotence. The original source project remained unchanged. Codex's final verdict was PASS, and the run is Completed.
+
+The reviewer's nested `node --test` invocation reported one file-level pass; direct `node slugify.test.mjs` reported all seven individual passes. Independent execution of the specified test command outside the reviewer's nested runner reported seven passes as expected. No result was accepted solely from the model's claim.
+
+See [machine-readable pilot receipt](live-pilot-result.json) for providers, models, effort, attempts and handoff counts. Reported costs are for the final attempt only and exclude retries or providers that do not supply cost.
+
+## Persistence and recovery results
+
+An eight-step demo was interrupted by `docker compose restart`. After startup it was marked **Interrupted**, with no silent rerun. A separate live run's pending design approval and output survived unchanged. Explicit retry completed all eight demo steps. This is a real process/container restart, in addition to the engine unit tests.
+
+## Review findings corrected during development
+
+- Concurrent workspace initialization race.
+- UI action endpoint/body mismatch.
+- File-browser response-shape mismatch.
+- Fastify response hook failing to complete actual HTTP requests.
+- Workflow save confirmation disappearing immediately after parent refresh.
+- Container sandbox compatibility and OpenCode working-directory propagation.
+- Large Flash assignments exhausting output limits without writing files. Work was split into smaller approved assignments; truncation is now treated as failure even if the CLI exits zero.
+
+## Scope of assurance
+
+These checks establish a working local single-user v1. They do not establish hostile-repository isolation, multi-tenant security, unattended correctness, provider uptime, or universal model/account availability. Tests that use injected executors are identified as engine/API tests; demo browser flows do not claim to invoke providers. Live provider tests are listed separately above.
+
+Agents share one container identity. Run folders separate edits, while approvals separate handoffs. Source changes are not automatically merged. A provider's confident response is not sufficient evidence of correctness: the live pilot includes independent file and executable-test verification.
+
+
+## Jev integration (20 September 2026)
+
+Added an Agents-page Jev evaluator and write-only API-key settings. Credentials are AES-256-GCM encrypted in the persistent server data volume; the encryption key is local in the same volume. Saved credentials override the optional environment fallback. Removing the saved key does not remove environment configuration.
+
+Validation: 42 automated tests passed, including Jev key encryption, restart persistence, removal, corrupt-key failure, all three typed answer formats, request validation, upstream authentication/rate-limit/network/timeout failures, response-size limits, and secret-free responses. CLI child-process tests verify that TYPESAFE_API_KEY is not inherited.
+
+The dedicated browser test passes through the real compiled frontend and API: save key, clear input, restart server, verify persistence, test connection, evaluate Noul/Choice/Score, check mobile layout, and remove key. Its remote TypeSafe endpoint is replaced by a deterministic fixture. No real Jev API key was supplied or used during this test; live authentication must be verified with Test connection after the user saves their own key.
+
+Jev evaluations remain manual and advisory. They do not alter workflow state, approve agent handoffs, or edit files.
+
+
+## Git worktrees and draft PRs (20 September 2026)
+
+Implemented a project worktree mode, managed bare repositories, per-run branches, diff snapshots and approval-gated draft PR publishing. The original checkout stays unchanged. Interrupted setup preserves the pinned base, stale snapshots cannot publish, and retries recover an existing PR.
+
+Validation: typecheck and production build passed; the full backend suite passed 80/80 before concurrent model-catalog edits. Targeted browser coverage passed for worktree approval/publishing/reload/mobile layout, project management, review rework and step chat. A final isolated Linux Compose container passed 27/27 Git, engine and project regression tests. Health returned 200; GitHub CLI was present. Real temporary repositories exercised parallel worktrees, recovery, tracked/untracked diffs, credential-path rejection, stale preview rejection, authentication failure, a real push to a local bare remote, and PR idempotency. GitHub API/CLI responses were simulated; no real GitHub PR was published.
+
+Logs: artifacts/worktree-tests.log, artifacts/worktree-ui.log, artifacts/worktree-ui-final.log, artifacts/worktree-container-regression.log and artifacts/worktree-compose-build-retry.log. The intermediate Windows regression rerun encountered Linux esbuild binaries installed by the concurrently running user agent; the same targeted regressions passed in the isolated Linux container. An initial Docker export cache error succeeded on retry.
+
+The new image is built and validated. The live platform was not restarted because run 93b9ef82-ba48-4146-9e90-15e37dbefa80 was still executing and editing this checkout. After that work is complete and reviewed, rebuild and recreate the platform to include the final combined changes. The current AgentLoom checkout has no initial commit or GitHub origin, so it needs repository setup and gh login before it can publish a real PR.
+
+
+## Approved Task to Verified Delivery (20 September 2026)
+
+Added an upgrade-safe workflow template: approved planning -> OpenCode cheap implementation at max effort -> direct validation commands plus Jev signals -> GPT-6-Astra review -> final human approval. Command contracts are snapshotted at run creation. Commands record exit codes, timing and bounded output; a source fingerprint checks freshness. Failed commands, source changes during/after validation, and Markdown BLOCKED verdicts cannot be approved. Validation histories survive repair and refresh. Jev is advisory, with one transient retry and an explicit unavailable/failed fallback.
+
+Validation: typecheck, production build, 100/100 backend tests, and targeted browser scenarios for the evidence workflow, rework and step chat passed. Browser coverage also verified command editing with multiline arguments, persisted workflow settings, unchanged existing run contracts and mobile layout. Tests cover failures despite confident reviewer prose, repair and revalidation, stale source rejection, Jev outages, command startup failures, timeout/cancellation, bounded/redacted output and Markdown blocker variants. Docker image built successfully.
+
+A real isolated Compose pilot used GPT-6-Astra planning/review, deepseek/deepseek-flash with max effort, actual npm commands and jev-1.13.0. The first implementation passed 10 tests but the reviewer found signed-zero behavior that violated unchanged in-range values. We returned findings to implementation. A Git baseline from the untouched disposable fixture was attached to resolve the reviewer's initial inability to verify change scope. The repaired run passed 12 tests and both syntax checks, returned real Jev signals, received an independent PASS and completed through the approval API. Test approval applied only to this disposable fixture.
+
+Pilot id: 68efb82f-b31d-4d5c-9391-1ead7328e770. Evidence is in artifacts/evidence-workflow/live-evidence-pilot-completed.json; logs and mobile screenshot are alongside it. The first Jev request failed transiently; a diagnostic retry succeeded, and the repaired validation produced persisted signals. This pilot demonstrates the full path and a useful review catch, not general model accuracy.
+
+Deployment completed after the user's active review finished. The main Compose service is healthy and /api/workflows contains evidence-delivery with the expected four stages and command contract. The actual localhost:4317 UI displayed all three editable validation commands without browser errors. The disposable pilot stack was stopped; copied Jev credentials were removed from its private data volume. Main credentials and user runs were preserved.
+
+The council extension is documented separately in docs/COUNCIL_PROPOSAL.md as a proposal only.

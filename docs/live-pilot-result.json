@@ -1,0 +1,47 @@
+{
+  "runId": "22aaf2c4-0e7a-40ba-b926-4d365e2fd824",
+  "status": "completed",
+  "steps": [
+    {
+      "name": "Plan",
+      "provider": "codex",
+      "model": "CLI default",
+      "effort": "high",
+      "attempts": 1,
+      "status": "completed",
+      "reportedFinalAttemptCostUsd": null
+    },
+    {
+      "name": "Design",
+      "provider": "claude",
+      "model": "claude-fable-5-1",
+      "effort": "high",
+      "attempts": 2,
+      "status": "completed",
+      "reportedFinalAttemptCostUsd": 0.21168025000000001
+    },
+    {
+      "name": "Implement",
+      "provider": "opencode",
+      "model": "deepseek/deepseek-flash",
+      "effort": "max",
+      "attempts": 1,
+      "status": "completed",
+      "reportedFinalAttemptCostUsd": 0.001845444
+    },
+    {
+      "name": "Review",
+      "provider": "codex",
+      "model": "CLI default",
+      "effort": "high",
+      "attempts": 2,
+      "status": "completed",
+      "reportedFinalAttemptCostUsd": null
+    }
+  ],
+  "approvals": 4,
+  "revisions": 2,
+  "sourceUnchanged": true,
+  "generatedTestsPassed": 7,
+  "independentUnicodeInvariantCases": 200
+}
