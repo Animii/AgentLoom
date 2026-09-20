@@ -1,10 +1,12 @@
-import {runValidationCommand, sourceFingerprint, evidenceSummary} from './validation.js';
+import { runCouncil, councilSummary, assertCouncilCurrent } from './council.js';
+import { councilReady } from '../shared/council.js';
+import {runValidationCommand, sourceFingerprint, evidenceSummary, readSourceSnapshot, snapshotFingerprint} from './validation.js';
 import type {ValidationEvidence, ValidationSignals} from '../shared/types.js';
 import { prepareGitWorkspace } from './git-workspaces.js';
 import { uncertainAssessmentToken } from '../shared/review-assessment.js';
 import { EXECUTION_POLICY } from './execution-policy.js';
 import { reworkTarget } from '../shared/rework.js';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
@@ -143,6 +145,7 @@ export class Engine {
     if (!step || step.status !== 'waiting_approval') {
       throw new Error('Current step is not waiting for approval');
     }
+    if (run.mode === 'live' && step.definition.council && !councilReady(step)) throw Error('Council findings and missing evidence must be resolved before approval.');
     if (BLOCKED_PATTERN.test(step.output)) throw Error('Resolve the reported blocker before approving.');
     if (step.assessment?.attempt === step.attempt && step.assessment.status === 'running') throw new Error('Wait for Jev to finish classifying this review before approving.');
     const uncertaintyToken = uncertainAssessmentToken(step);
@@ -180,7 +183,7 @@ export class Engine {
     if (!step) {
       throw new Error('Current step not found');
     }
-    if (isPlanningStep(step.definition) || step.conversation) return this.chat(id, step.definition.id, trimmedFeedback, randomUUID());
+    if (step.definition.council || isPlanningStep(step.definition) || step.conversation) return this.chat(id, step.definition.id, trimmedFeedback, randomUUID());
     const priorOutput = step.output;
     this.priorOutputs.set(revisionKey(id, run.currentStep), priorOutput);
     this.store.addEvent(
@@ -217,11 +220,11 @@ export class Engine {
     for (let i = target; i <= reviewIndex; i++) {
       const step = run.steps[i];
       step.history ??= [];
-      step.history.push({ validation: step.validation, conversation: step.conversation, toolCalls: step.toolCalls, attempt: step.attempt, status: step.status, output: step.output, error: step.error, feedback: step.feedback, startedAt: step.startedAt, finishedAt: step.finishedAt, costUsd: step.costUsd });
+      step.history.push({ council: step.council, validation: step.validation, conversation: step.conversation, toolCalls: step.toolCalls, attempt: step.attempt, status: step.status, output: step.output, error: step.error, feedback: step.feedback, startedAt: step.startedAt, finishedAt: step.finishedAt, costUsd: step.costUsd });
       this.priorOutputs.delete(revisionKey(id, i));
       step.output = ''; step.error = null; step.sessionId = null; step.feedback = i === target ? feedback : `Independently verify the fixes against the approved requirements and the prior findings. Run documented validation where permitted. Report BLOCKED if any blocking finding remains.\n\nPrior findings:\n${findings}`;
       step.status = 'pending'; step.startedAt = null; step.finishedAt = null; step.costUsd = null;
-      step.validation = undefined; step.toolCalls = []; step.pendingAskId = undefined; step.conversation = undefined;
+      step.council = undefined; step.validation = undefined; step.toolCalls = []; step.pendingAskId = undefined; step.conversation = undefined;
     }
     // Re-review always requires a human decision, even for normally automatic reviews.
     review.definition.approval = true;
@@ -249,6 +252,7 @@ export class Engine {
     }
     this.projects.assertNoConflict(run);
     const stepIndex = run.steps.indexOf(step);
+    if (step.definition.council) return this.challengeCouncil(id, stepId, content, messageId);
     if (step.status === 'pending') throw new Error('Start this step before sending a message.');
     initializeConversation(run, step);
     step.conversation!.push(message('user', content, messageId));
@@ -259,11 +263,11 @@ export class Engine {
       for (const downstream of run.steps.slice(stepIndex + 1)) {
         if (downstream.attempt > 0 && downstream.status !== 'pending') {
           downstream.history ??= [];
-          downstream.history.push({ validation: downstream.validation, conversation: downstream.conversation, attempt: downstream.attempt, status: downstream.status, output: downstream.output, error: downstream.error, feedback: downstream.feedback, startedAt: downstream.startedAt, finishedAt: downstream.finishedAt, costUsd: downstream.costUsd, toolCalls: downstream.toolCalls });
+          downstream.history.push({ council: downstream.council, validation: downstream.validation, conversation: downstream.conversation, attempt: downstream.attempt, status: downstream.status, output: downstream.output, error: downstream.error, feedback: downstream.feedback, startedAt: downstream.startedAt, finishedAt: downstream.finishedAt, costUsd: downstream.costUsd, toolCalls: downstream.toolCalls });
         }
         downstream.status = 'pending'; downstream.output = ''; downstream.feedback = ''; downstream.error = null;
         downstream.startedAt = null; downstream.finishedAt = null; downstream.sessionId = null; downstream.costUsd = null;
-        downstream.validation = undefined; downstream.conversation = undefined; downstream.pendingAskId = undefined; downstream.toolCalls = [];
+        downstream.council = undefined; downstream.validation = undefined; downstream.conversation = undefined; downstream.pendingAskId = undefined; downstream.toolCalls = [];
         this.priorOutputs.delete(revisionKey(id, run.steps.indexOf(downstream)));
       }
     }
@@ -285,6 +289,18 @@ export class Engine {
     return run;
   }
 
+  private challengeCouncil(id: string, stepId: string, question: string, messageId: string): Run {
+    const run = this.requireRun(id);
+    const step = run.steps[run.currentStep];
+    if (!step || step.definition.id !== stepId || !['blocked', 'waiting_approval'].includes(run.status) || !step.council) throw Error('Only the current completed council can receive a challenge.');
+    if (step.council.challenge) throw Error('The focused challenge round is already used. Send findings to implementation or start a new run with clarified requirements.');
+    if (step.council.status === 'stale') throw Error('Council evidence is stale. Repeat implementation and validation.');
+    step.conversation ??= []; step.conversation.push(message('user', question, messageId));
+    step.council.challenge = { question, requested: true, reviewers: step.definition.council!.reviewers.map(member => ({member, status:'pending', output:'', costUsd:null})) };
+    step.status = 'pending'; run.status = 'queued'; run.error = null; step.error = null;
+    this.persist(run); this.emitEvent(id, stepId, 'revision', 'Requested the single focused council challenge round.'); this.schedule(); return run;
+  }
+
   retry(id: string): Run {
     const run = this.requireRun(id);
     this.projects.assertNoConflict(run);
@@ -300,6 +316,11 @@ export class Engine {
       }
     }
     const step = run.steps[run.currentStep];
+    if (step?.definition.council && step.council) {
+      step.history ??= []; step.history.push({council:structuredClone(step.council),attempt:step.attempt,status:step.status,output:step.output,error:step.error,feedback:step.feedback,startedAt:step.startedAt,finishedAt:step.finishedAt,costUsd:step.costUsd});
+      step.council.resumeRequested = true;
+      if(step.council.challenge) step.council.challenge.requested = true;
+    }
     if (step) {
       if (step.status === 'failed' || step.status === 'running') {
         step.status = 'pending';
@@ -440,6 +461,12 @@ export class Engine {
       if (signal.aborted) {
         return;
       }
+      const prepared = this.requireRun(runId);
+      if (!prepared.sourceBaseline && prepared.steps.some(s=>s.definition.council) && prepared.steps.every(s=>s.attempt===0)) {
+        const files = await readSourceSnapshot(workspace);
+        prepared.sourceBaseline = {fingerprint:snapshotFingerprint(files),files:files.map(file=>({path:file.relative,hash:createHash('sha256').update(file.content).digest('hex')}))};
+        this.persist(prepared);
+      }
       await this.runSteps(runId, workspace, signal);
     } catch (error) {
       this.handleRunError(runId, signal, error);
@@ -513,6 +540,7 @@ export class Engine {
       }
       if (isPlanningStep(step.definition)) initializeConversation(run, step);
       const prompt = this.buildPrompt(run, step);
+      if (step.council && !step.council.challenge?.requested && !step.council.resumeRequested) { step.history ??= []; step.history.push({council:step.council,attempt:step.attempt,status:step.status,output:step.output,error:step.error,feedback:step.feedback,startedAt:step.startedAt,finishedAt:step.finishedAt,costUsd:step.costUsd}); step.council=undefined; }
       if (step.validation) { step.history ??= []; step.history.push({validation:step.validation,attempt:step.attempt,status:step.status,output:step.output,error:step.error,feedback:step.feedback,startedAt:step.startedAt,finishedAt:step.finishedAt,costUsd:step.costUsd}); step.validation=undefined; }
       step.status = 'running';
       step.attempt += 1;
@@ -618,6 +646,7 @@ export class Engine {
     workspace: string,
     signal: AbortSignal,
   ): Promise<AgentResult> {
+    if (step.definition.council) return this.runCouncilStep(run, step, signal);
     if (step.definition.validation) return this.runRecordedValidation(run,step,workspace,signal);
     if (run.mode === 'demo') {
       return this.runDemoStep(run, step, signal);
@@ -631,6 +660,8 @@ export class Engine {
   async assertValidationCurrent(id: string): Promise<void> {
     const run=this.requireRun(id);
     if(run.mode==='demo') return;
+    const final = run.steps.at(-1);
+    if (final?.definition.council && run.currentStep === run.steps.length - 1 && final.council?.status !== 'running') await assertCouncilCurrent(run, final);
     const validation=run.steps.filter(s=>s.definition.validation);
     if(!validation.length) return;
     for(const step of validation) {
@@ -638,6 +669,17 @@ export class Engine {
       if(!evidence || evidence.attempt!==step.attempt || evidence.status!=='passed' || !evidence.commands.length || evidence.commands.some(c=>c.status!=='passed') || evidence.before!==evidence.after) throw Error('Recorded validation is missing, failed, or changed source files.');
       if(await sourceFingerprint(run.workspace)!==evidence.after) throw Error('Source changed since recorded validation.');
     }
+  }
+
+  private async runCouncilStep(run: Run, step: StepRun, signal: AbortSignal): Promise<AgentResult> {
+    const evidence = await runCouncil(run, step, this.config, this.execute, signal, evidence => {
+      const latest = this.requireRun(run.id); const target = latest.steps[latest.currentStep];
+      if ((!['running','cancelled','interrupted'].includes(latest.status)) || target?.definition.id !== step.definition.id || target.attempt !== step.attempt) return;
+      target.council = structuredClone(evidence); target.output = councilSummary(evidence); this.persist(latest);
+    }, event => this.handleAgentEvent(run.id, step.definition.id, event, signal));
+    const reviews = [...evidence.reviewers, ...(evidence.challenge?.reviewers ?? [])];
+    const costs = [...reviews.map(r => r.costUsd), evidence.chair?.costUsd, evidence.challenge?.chair?.costUsd].filter((c): c is number => typeof c === 'number');
+    return {output:councilSummary(evidence), sessionId:null, costUsd:costs.length ? costs.reduce((a,b)=>a+b,0) : null};
   }
 
   private async runRecordedValidation(run:Run,step:StepRun,workspace:string,signal:AbortSignal):Promise<AgentResult>{

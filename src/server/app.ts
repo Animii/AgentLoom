@@ -92,10 +92,16 @@ const stepDefinitionSchema = z
     access: z.enum(['read-only', 'workspace-write']),
     approval: z.boolean(),
     planning: z.boolean().optional(),
+    council: z.strictObject({reviewers:z.array(z.strictObject({id:idField,name:nameField,focus:z.string().min(1).max(2000),provider:z.enum(['claude','codex','opencode']),model:modelField.refine(v=>v.trim().length>0,'Council models must be explicit.'),effort:z.string()})).length(3)}).optional(),
     validation: z.strictObject({commands:z.array(z.strictObject({executable:z.string().min(1).max(1000).regex(/^[^\x00-\x1f]+$/),args:z.array(z.string().max(4000).refine(v=>!v.includes('\0'))).max(50),timeoutMs:z.number().int().min(100).max(3600000)})).min(1).max(8)}).optional(),
   })
   .superRefine((step, ctx) => {
     if(step.validation&&(step.planning||step.access!=='read-only'))ctx.addIssue({code:'custom',message:'Validation steps must be read-only and cannot be planning steps.'});
+    if(step.council){
+      if(step.validation || step.planning || step.access!=='read-only' || !step.approval || !step.model.trim())ctx.addIssue({code:'custom',message:'Council requires an explicit chair model, read-only access and approval; it cannot be planning or validation.'});
+      if(new Set(step.council.reviewers.map(r=>r.id)).size!==3 || step.council.reviewers.some(r=>r.id==='chair'))ctx.addIssue({code:'custom',message:'Council reviewer IDs must be unique and cannot be chair.'});
+      for(const member of step.council.reviewers)if(member.effort && !PROVIDER_EFFORTS[member.provider].includes(member.effort))ctx.addIssue({code:'custom',message:'Invalid council reviewer effort.'});
+    }
     const allowed = PROVIDER_EFFORTS[step.provider];
     if (step.effort !== '' && !allowed.includes(step.effort)) {
       ctx.addIssue({
@@ -128,6 +134,11 @@ const workflowSchema = z
         });
       }
       seen.add(step.id);
+      if(step.council){
+        if(index!==workflow.steps.length-1 || !workflow.steps.slice(0,index).some(s=>s.validation))ctx.addIssue({code:'custom',message:'Council must be the final step after recorded validation.'});
+        const writers=workflow.steps.slice(0,index).filter(s=>s.access==='workspace-write');
+        if(writers.some(w=>step.council!.reviewers.some(r=>r.provider===w.provider && (!w.model.trim() || r.model.toLowerCase()===w.model.toLowerCase())) || step.provider===w.provider && (!w.model.trim() || step.model.toLowerCase()===w.model.toLowerCase())))ctx.addIssue({code:'custom',message:'The implementer model cannot be an independent council reviewer or chair.'});
+      }
       if(step.validation && (index===0 || index===workflow.steps.length-1 || !workflow.steps.slice(0,index).some(s=>s.approval&&s.planning) || !workflow.steps.at(-1)!.approval || workflow.steps.at(-1)!.access!=='read-only'))ctx.addIssue({code:'custom',message:'Recorded validation requires an approved planning step before it and a final read-only review with approval.'});
     });
   });

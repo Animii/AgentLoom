@@ -399,3 +399,21 @@ label { font-size:13px; font-weight:500; }
 .validation-command-editor {grid-column:1/-1;min-width:0;}
 .validation-command-editor fieldset {display:grid;gap:10px;margin:12px 0;border:1px solid var(--border);}
 .validation-command-editor label {display:grid;gap:5px;}
+
+.council-panel { border:1px solid var(--border,#dce2e6); border-radius:14px; padding:24px; margin:16px 0; overflow-wrap:anywhere; }
+.council-heading { display:flex; align-items:baseline; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.council-heading h3 { margin:0; }
+.council-members { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:20px 0; align-items:start; }
+.council-members > details { border:1px solid var(--border,#dce2e6); border-radius:10px; padding:14px; min-width:0; }
+.council-members summary span { display:block; margin-top:6px; font-size:.85rem; }
+.council-panel details { margin-block:12px; }
+.council-panel summary { cursor:pointer; }
+.council-panel li { margin-bottom:8px; }
+.council-challenge form { margin-top:16px; }
+.council-challenge textarea { display:block; width:100%; margin-top:8px; }
+.council-editor fieldset { display:grid; gap:12px; margin:12px 0; }
+.council-editor label { display:grid; gap:6px; }
+@media(max-width:700px) { .council-panel {padding:16px;} .council-members {grid-template-columns:1fr;} }
+
+.council-members > details[open] { grid-column:1 / -1; }
+.council-chair {border-top:1px solid var(--border,#dce2e6);padding-top:12px;}

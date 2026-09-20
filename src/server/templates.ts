@@ -141,3 +141,19 @@ export const evidenceWorkflow: Workflow = {
  ]
 };
 initialWorkflows.push(evidenceWorkflow);
+
+export const councilWorkflow: Workflow = {
+  ...structuredClone(evidenceWorkflow), id:'council-delivery', name:'Approved Task with Outcome Council',
+  description:'Opt-in council: approved task, cheap implementation, recorded tests and Jev signals, three independent reviews and a chair synthesis, then your approval. One focused challenge round; no majority vote can clear blockers.',
+};
+councilWorkflow.steps[0].instructions += ' Assign stable acceptance criterion IDs (AC1, AC2, etc.) and explicitly define scope.';
+councilWorkflow.steps[3] = {
+  ...councilWorkflow.steps[3], name:'Outcome council', role:'council reviewer',
+  instructions:'Review all approved criteria, scope, correctness and product behavior against frozen source and recorded evidence. The chair summarizes contradictions; only the user approves.',
+  council:{reviewers:[
+    {id:'correctness',name:'Correctness',focus:'Requirements, edge cases, state transitions and regressions.',provider:'codex',model:'gpt-6-astra',effort:'high'},
+    {id:'product',name:'Product and UX',focus:'Approved acceptance criteria, scope, user-visible behavior and interaction quality. For non-UI work review contracts and integration.',provider:'claude',model:'claude-fable-5-1',effort:'high'},
+    {id:'adversarial',name:'Adversarial verification',focus:'Challenge coverage and claims. Construct minimal counterexamples and regression probes. Report concrete evidence, not hypothetical concerns.',provider:'codex',model:'gpt-6-astra',effort:'high'},
+  ]},
+};
+initialWorkflows.push(councilWorkflow);

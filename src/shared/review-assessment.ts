@@ -1,7 +1,7 @@
 import type { StepRun, ReviewAssessment } from './types.js';
 import { isPlanningStep } from './planning.js';
 export function canAssessReview(step: StepRun) {
-  return !isPlanningStep(step.definition) && step.definition.access === 'read-only' && /review|verif/i.test(step.definition.role + ' ' + step.definition.name) && ['blocked','waiting_approval','completed'].includes(step.status) && !!step.output.trim();
+  return !step.definition.council && !isPlanningStep(step.definition) && step.definition.access === 'read-only' && /review|verif/i.test(step.definition.role + ' ' + step.definition.name) && ['blocked','waiting_approval','completed'].includes(step.status) && !!step.output.trim();
 }
 export const assessmentAdvice: Record<NonNullable<ReviewAssessment['category']>, {label: string; advice: string}> = {
   code_fix: {label:'Code fix',advice:'Send the findings to the implementer, then repeat validation and review.'},

@@ -87,3 +87,13 @@ Pilot id: 68efb82f-b31d-4d5c-9391-1ead7328e770. Evidence is in artifacts/evidenc
 Deployment completed after the user's active review finished. The main Compose service is healthy and /api/workflows contains evidence-delivery with the expected four stages and command contract. The actual localhost:4317 UI displayed all three editable validation commands without browser errors. The disposable pilot stack was stopped; copied Jev credentials were removed from its private data volume. Main credentials and user runs were preserved.
 
 The council extension is documented separately in docs/COUNCIL_PROPOSAL.md as a proposal only.
+
+
+## Outcome council candidate - 2026-09-21
+
+- Host typecheck/build passed; 117 backend tests passed. Five targeted browser tests passed (council, streaming council, evidence workflow, rework, step chat), including 390px layout and refresh.
+- Real pre-PR council reviews identified generic-revision and interrupted-review blocker-retention defects. These were reproduced and fixed with API/engine regressions, including completed initial and challenge reports, persisted streaming text/tool calls, and unresolved obligations across repair handoffs. Completed reviewers/chair are retained on retry; only unfinished work resumes.
+- The rebuilt Docker Compose app is healthy at localhost:4317. Real running council cards were checked with Playwright: streamed text, two interleaved tool groups, no page errors.
+- First verification runs: 80730214-ad64-44e9-bd29-c3f27fe0d469 and e36daa40-1a3a-464c-94e1-803e025c5ca6. Their blocking reports are retained. A fresh final candidate verification is required before the PR is opened.
+- Jev routing experiment: 12 scenarios repeated three times (one reversed option ordering), 33/36 expected choices, zero unsafe completes and no upstream errors. All three mismatches routed stale evidence to implementation rather than clarification. These are small synthetic checks, not a production quality estimate.
+- Isolated live pilot e7355812-a0ab-473d-9ee7-77040e0d1da5: Jev returned a seeded signed-zero defect to Flash, independent validation/council passed after repair, and Jev completed the disposable run after controller authority was made explicit. Initial authorization ambiguities caused conservative stops and are retained in the experiment record. A fresh uninterrupted trial is running separately.

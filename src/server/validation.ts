@@ -7,18 +7,20 @@ import type {Run,ValidationCommand,ValidationEvidence,ValidationResult,Validatio
 import type {registerJev} from './jev.js';
 
 const excluded=new Set(['.git','node_modules','dist','build','coverage','.next','.cache','.data','.auth','artifacts','test-results','playwright-report']);
-export async function sourceFingerprint(root:string):Promise<string>{
- const hash=createHash('sha256');let count=0,bytes=0;
+export async function readSourceSnapshot(root:string):Promise<{relative:string;content:Buffer}[]>{
+ const files:{relative:string;content:Buffer}[]=[];let count=0,bytes=0;
  async function walk(dir:string){for(const entry of (await readdir(dir,{withFileTypes:true})).sort((a,b)=>a.name.localeCompare(b.name))){
   if(excluded.has(entry.name)||entry.name==='.env'||entry.name.startsWith('.env.')&&entry.name!=='.env.example')continue;
   const file=path.join(dir,entry.name),relative=path.relative(root,file).replaceAll('\\','/');
   if(entry.isSymbolicLink())throw Error('Validation cannot fingerprint symlinked source. Use a source workspace without symlinks.');
   if(entry.isDirectory())await walk(file);else if(entry.isFile()){
    const stat=await lstat(file);if(++count>20000||(bytes+=stat.size)>100_000_000)throw Error('Source exceeds the validation snapshot limit (20,000 files / 100 MB).');
-   hash.update(relative+'\0');hash.update(createHash('sha256').update(await readFile(file)).digest());
+   files.push({relative,content:await readFile(file)});
   }
- }}await walk(root);return hash.digest('hex');
+ }}await walk(root);return files;
 }
+export function snapshotFingerprint(files:{relative:string;content:Buffer}[]):string { const hash=createHash('sha256'); for(const file of files){hash.update(file.relative+'\0');hash.update(createHash('sha256').update(file.content).digest());}return hash.digest('hex'); }
+export async function sourceFingerprint(root:string):Promise<string>{return snapshotFingerprint(await readSourceSnapshot(root));}
 function redact(value:string){
  for(const [key,secret] of Object.entries(process.env))if(/KEY|TOKEN|SECRET|PASSWORD/i.test(key)&&secret&&secret.length>=6)value=value.split(secret).join('[redacted]');
  return value.replace(/((?:api[_-]?key|token|password|secret)\s*[:=]\s*)[^\s,;]+/gi,'$1[redacted]');
