@@ -2,7 +2,7 @@ import { runCouncil, councilSummary, assertCouncilCurrent } from './council.js';
 import { councilReady } from '../shared/council.js';
 import {runValidationCommand, sourceFingerprint, evidenceSummary, readSourceSnapshot, snapshotFingerprint} from './validation.js';
 import type {ValidationEvidence, ValidationSignals} from '../shared/types.js';
-import { prepareGitWorkspace } from './git-workspaces.js';
+import { prepareGitWorkspace, previewRunGit } from './git-workspaces.js';
 import { uncertainAssessmentToken } from '../shared/review-assessment.js';
 import { EXECUTION_POLICY } from './execution-policy.js';
 import { reworkTarget } from '../shared/rework.js';
@@ -93,6 +93,7 @@ export class Engine {
     expectedWorkspaceMode?: 'direct' | 'isolated' | 'worktree';
     workflowId: string;
     mode: 'live' | 'demo';
+    automation?: {publication:'manual'|'draft'};
   }): Promise<Run> {
     const workflow = this.store.getWorkflow(input.workflowId);
     if (!workflow) {
@@ -101,6 +102,7 @@ export class Engine {
     const now = new Date().toISOString();
     const projectLocation = await this.projects.forRun(input.project);
     if (input.expectedWorkspaceMode && input.expectedWorkspaceMode !== (projectLocation?.workspaceMode ?? 'isolated')) throw new Error('The project workspace mode changed. Reopen New run to review its current access before starting.');
+    if(input.automation && (input.mode!=='live' || projectLocation?.workspaceMode!=='worktree' || !workflow.steps[0]?.planning || !workflow.steps.at(-1)?.council || workflow.steps.slice(1,-1).some(s=>s.approval))) throw Error('Automation requires a live Git worktree, approved first plan, automatic intermediate steps and final outcome council.');
     const run: Run = {
       id: randomUUID(),
       title: input.title,
@@ -129,6 +131,7 @@ export class Engine {
       workspace: '',
       error: null,
     };
+    if(input.automation)run.automation={version:1,publication:input.automation.publication,status:'awaiting_plan',repairsUsed:0,maxRepairs:2,message:'Approve the plan to authorize up to two repairs and the selected delivery policy.',decisions:[]};
     this.projects.assertNoConflict(run);
     this.persist(run);
     this.emitEvent(run.id, null, 'status', 'Run queued.');
@@ -136,7 +139,20 @@ export class Engine {
     return run;
   }
 
-  approve(id: string, acknowledgedAssessment?: string): Run {
+  async approveCurrent(id: string, acknowledgedAssessment?: string, actor:'user'|'controller'='user'): Promise<Run> {
+    const initial = this.requireRun(id);
+    const revision = JSON.stringify(initial);
+    if (initial.currentStep === initial.steps.length - 1) {
+      await this.assertValidationCurrent(id);
+      const preview = initial.git ? await previewRunGit(initial, this.config) : undefined;
+      const latest = this.requireRun(id);
+      if (JSON.stringify(latest) !== revision) throw Error('The run changed during approval. Review its current state.');
+      if (preview && latest.git) { latest.git.approvedTree = preview.tree; this.persist(latest); }
+    }
+    return this.approve(id, acknowledgedAssessment, actor);
+  }
+
+  approve(id: string, acknowledgedAssessment?: string, actor: 'user'|'controller' = 'user'): Run {
     const run = this.requireRun(id);
     if (run.status !== 'waiting_approval') {
       throw new Error(`Cannot approve run in status "${run.status}"`);
@@ -152,10 +168,12 @@ export class Engine {
     if (uncertaintyToken && acknowledgedAssessment !== uncertaintyToken) throw new Error('Acknowledge the current uncertain Jev assessment before approving.');
     if (run.mode==='live' && run.currentStep===run.steps.length-1 && run.steps.some(s=>s.definition.validation && (!s.validation || s.validation.status!=='passed' || s.validation.before!==s.validation.after))) throw Error('Recorded validation must pass before final approval.');
     if (step.pendingAskId) throw new Error('Answer the planner questions before approving a plan.');
+    if(actor==='controller' && (!run.automation?.approvedAt || run.currentStep!==run.steps.length-1))throw Error('Controller approval is not authorized.');
+    if(run.automation && step.definition.planning){run.automation.approvedAt=new Date().toISOString();run.automation.contractHash=createHash('sha256').update(JSON.stringify({task:run.task,plan:step.output,definitions:run.steps.map(s=>s.definition)})).digest('hex');run.automation.status='active';run.automation.message='Working within the approved plan.';}
     step.status = 'completed';
     step.finishedAt = step.finishedAt ?? new Date().toISOString();
     run.currentStep += 1;
-    this.store.addEvent(id, step.definition.id, 'approval', `Approved step "${step.definition.name}".${uncertaintyToken ? " User explicitly acknowledged the uncertain Jev assessment." : ""}`);
+    this.store.addEvent(id, step.definition.id, 'approval', `Approved step "${step.definition.name}" by ${actor === 'controller' ? 'the authorized Jev controller' : 'the user'}.${uncertaintyToken ? " User explicitly acknowledged the uncertain Jev assessment." : ""}`);
     if (run.currentStep >= run.steps.length) {
       run.status = 'completed';
       this.persist(run);
@@ -207,10 +225,11 @@ export class Engine {
     return run;
   }
 
-  rework(id: string): Run {
+  rework(id: string, automated = false): Run {
     const run = this.requireRun(id);
     const target = reworkTarget(run);
     if (target < 0) throw new Error('This step has no eligible completed implementation to return to.');
+    if(automated){if(!run.automation?.approvedAt || run.automation.repairsUsed>=run.automation.maxRepairs)throw Error('Automatic repair budget exhausted.');run.automation.repairsUsed++;run.automation.status='active';}
     const reviewIndex = run.currentStep;
     const review = run.steps[reviewIndex];
     if (!review.output.trim()) throw new Error('Review findings are required.');
@@ -233,6 +252,20 @@ export class Engine {
     this.emitEvent(id, review.definition.id, 'revision', `Sent findings to "${run.steps[target].definition.name}". Validation and review will run again; previous attempts are preserved.`);
     this.schedule();
     return run;
+  }
+
+  revalidate(id:string):Run {
+    const run=this.requireRun(id);
+    if(!['blocked','waiting_approval','completed'].includes(run.status)||run.git?.publishing||run.git?.prUrl)throw Error('Finish the current work before repeating validation.');
+    const index=run.steps.findIndex(s=>s.definition.validation);
+    if(index<0||run.currentStep<index)throw Error('This run has not reached recorded validation.');
+    for(const step of run.steps.slice(index)){
+      step.history??=[];step.history.push({council:step.council,validation:step.validation,conversation:step.conversation,toolCalls:step.toolCalls,attempt:step.attempt,status:step.status,output:step.output,error:step.error,feedback:step.feedback,startedAt:step.startedAt,finishedAt:step.finishedAt,costUsd:step.costUsd});
+      step.status='pending';step.output='';step.error=null;step.sessionId=null;step.startedAt=null;step.finishedAt=null;step.costUsd=null;step.council=undefined;step.validation=undefined;step.toolCalls=[];step.conversation=undefined;step.pendingAskId=undefined;
+    }
+    if(run.git)delete run.git.approvedTree;
+    if(run.automation){run.automation.status='paused';run.automation.message='Repeating validation and council. Resume automation after inspecting the new results.';}
+    run.currentStep=index;run.status='queued';run.error=null;this.persist(run);this.schedule();return run;
   }
 
   chat(id: string, stepId: string, text: string, messageId: string): Run {
@@ -661,7 +694,7 @@ export class Engine {
     const run=this.requireRun(id);
     if(run.mode==='demo') return;
     const final = run.steps.at(-1);
-    if (final?.definition.council && run.currentStep === run.steps.length - 1 && final.council?.status !== 'running') await assertCouncilCurrent(run, final);
+    if (final?.definition.council && run.currentStep >= run.steps.length - 1 && final.council?.status !== 'running') await assertCouncilCurrent(run, final);
     const validation=run.steps.filter(s=>s.definition.validation);
     if(!validation.length) return;
     for(const step of validation) {
@@ -972,6 +1005,11 @@ export class Engine {
     }
     let stepId: string | null = null;
     if (step && step.status === 'running') {
+      if(step.council){
+        step.council.status='needs_evidence';step.council.issues=['Server restarted; completed reports and partial output are preserved. Retry unfinished reviews.'];
+        for(const review of [...step.council.reviewers,...(step.council.challenge?.reviewers??[])])if(review.status==='running'||review.status==='pending'){review.status='failed';review.error=RESTART_ERROR;}
+        for(const chair of [step.council.chair,step.council.challenge?.chair])if(chair?.status==='running'){chair.status='failed';chair.error=RESTART_ERROR;}
+      }
       step.status = 'failed';
       step.error = RESTART_ERROR;
       step.finishedAt = new Date().toISOString();

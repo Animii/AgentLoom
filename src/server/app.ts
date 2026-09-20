@@ -1,4 +1,5 @@
 import {assessValidation} from './validation.js';
+import {Automation} from './automation.js';
 import { previewRunGit, publishDraftPr } from './git-workspaces.js';
 import { canAssessReview } from '../shared/review-assessment.js';
 import { createReviewAssessor } from './review-assessment.js';
@@ -158,6 +159,7 @@ const runInputSchema = z.strictObject({
   expectedWorkspaceMode: z.enum(['direct', 'isolated', 'worktree']).optional(),
   workflowId: idField,
   mode: z.enum(['live', 'demo']),
+  automation:z.strictObject({publication:z.enum(['manual','draft'])}).optional(),
 });
 
 const emptyBodySchema = z.strictObject({});
@@ -287,6 +289,7 @@ export async function createApp(config: AppConfig, options: CreateAppOptions = {
   const projects = new Projects(store, config);
   let evaluateJev: ReturnType<typeof registerJev> | undefined;
   let assessor: ReturnType<typeof createReviewAssessor> | undefined;
+  let automation:Automation|undefined;
   const engine = new Engine(store, config, options.execute ?? createExecutor(config), projects, (id,stepId) => assessor?.assess(id,stepId), (run,evidence)=>assessValidation(run,evidence,evaluateJev));
   app.decorate('store', store);
   app.decorate('engine', engine);
@@ -300,6 +303,7 @@ export async function createApp(config: AppConfig, options: CreateAppOptions = {
 
   app.addHook('onClose', async () => {
     modelCatalogs?.close();
+    await automation?.close();
     await engine.shutdown();
     await Promise.allSettled(publishing.values());
     await assessor?.close();
@@ -344,6 +348,33 @@ export async function createApp(config: AppConfig, options: CreateAppOptions = {
   });
 
   evaluateJev = registerJev(app, config, options.jevFetch ?? fetch);
+  async function publish(id:string,input?:{token:string;title:string;body:string}){
+    const run=store.getRun(id);if(!run?.git || run.status!=='completed'||run.mode!=='live')throw Error('Complete and approve the worktree run first.');
+    if(run.git.prUrl)return {url:run.git.prUrl,commit:run.git.publishedCommit};
+    if(publishing.has(id))throw Error('PR creation is already in progress.');
+    run.git.publishing=true;store.saveRun(run);
+    const job=(async()=>{await engine.assertValidationCurrent(id);const preview=await previewRunGit(run,config);if(!run.git?.approvedTree||preview.tree!==run.git.approvedTree)throw Error('Files changed after approval. Revalidate and approve the current files.');return (options.publishPr??publishDraftPr)(run,config,input??{token:preview.token,title:preview.title,body:preview.body});})();
+    publishing.set(id,job);
+    try{const result=await job;const latest=store.getRun(id)!;latest.git={...latest.git!,prUrl:result.url,publishedCommit:result.commit,publishing:false};store.saveRun(latest);store.addEvent(id,null,'log',`Draft PR created: ${result.url}`);return result;}
+    finally{publishing.delete(id);const latest=store.getRun(id);if(latest?.git?.publishing){latest.git.publishing=false;store.saveRun(latest);}}
+  }
+  automation=new Automation(store,engine,evaluateJev,id=>publish(id));
+  app.addHook('preHandler',async(request,reply)=>{
+    const match=/^\/api\/runs\/([^/]+)\/(messages|revise|rework|retry|cancel|approve)$/.exec(request.url.split('?')[0]);
+    if(request.method!=='POST'||!match)return;
+    const run=store.getRun(match[1]);
+    if(!run?.automation?.approvedAt)return;
+    try{automation!.pause(run.id,'You took control of this run. Resume automation when ready.');}catch(error){return sendError(reply,409,errorMessage(error));}
+  });
+  app.post<{Params:{id:string;action:string}}>('/api/runs/:id/automation/:action',async(request,reply)=>{
+    if(!emptyBodySchema.safeParse(bodyOrEmpty(request.body)).success)return sendError(reply,400,'Expected an empty body.');
+    if(!store.getRun(request.params.id)?.automation)return sendError(reply,404,'Automated run not found.');
+    try{if(request.params.action==='pause')automation!.pause(request.params.id);else if(request.params.action==='resume')automation!.resume(request.params.id);else return sendError(reply,404,'Unknown automation action.');return store.getRun(request.params.id);}catch(error){return sendError(reply,409,errorMessage(error));}
+  });
+  app.post<{Params:{id:string}}>('/api/runs/:id/revalidate',async(request,reply)=>{
+    if(!emptyBodySchema.safeParse(bodyOrEmpty(request.body)).success)return sendError(reply,400,'Expected an empty body.');
+    try{automation!.pause(request.params.id);return engine.revalidate(request.params.id);}catch(error){return sendError(reply,409,errorMessage(error));}
+  });
   assessor = createReviewAssessor(store, evaluateJev);
   app.post<{Params:{id:string;stepId:string}}>('/api/runs/:id/steps/:stepId/assessment', async(request,reply)=>{
     const parsed=emptyBodySchema.safeParse(bodyOrEmpty(request.body));
@@ -471,12 +502,9 @@ export async function createApp(config: AppConfig, options: CreateAppOptions = {
     if(run.git?.prUrl)return {url:run.git.prUrl};
     if(run.mode!=='live'||run.status!=='completed'||!run.git)return sendError(reply,409,'Complete and approve the worktree run first.');
     if(publishing.has(run.id))return sendError(reply,409,'PR creation is already in progress.');
-    run.git.publishing=true;store.saveRun(run);
-    const job=(options.publishPr??publishDraftPr)(run,config,body.data);publishing.set(run.id,job);
     try{
-      const result=await job;const latest=store.getRun(run.id)!;latest.git={...latest.git!,prUrl:result.url,publishedCommit:result.commit,publishing:false};store.saveRun(latest);store.addEvent(run.id,null,'log',`Draft PR created: ${result.url}`);return result;
+      return await publish(run.id,body.data);
     }catch(error){return sendError(reply,409,errorMessage(error));}
-    finally{publishing.delete(run.id);const latest=store.getRun(run.id);if(latest?.git?.publishing){latest.git.publishing=false;store.saveRun(latest);}}
   });
 
   app.post<{ Params: { id: string } }>('/api/runs/:id/approve', async (request, reply) => {
@@ -492,8 +520,7 @@ export async function createApp(config: AppConfig, options: CreateAppOptions = {
       return sendError(reply, 409, `Cannot approve run in status "${run.status}"`);
     }
     try {
-      if(run.currentStep===run.steps.length-1) await engine.assertValidationCurrent(run.id);
-      return engine.approve(run.id, body.data.acknowledgedAssessment);
+      return await engine.approveCurrent(run.id, body.data.acknowledgedAssessment);
     } catch (error) {
       return sendError(reply, 409, errorMessage(error));
     }

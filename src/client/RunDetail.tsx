@@ -1,6 +1,7 @@
 import CouncilPanel from './CouncilPanel';
 import ValidationPanel from './ValidationPanel';
 import GitRunPanel from './GitRunPanel';
+import AutomationPanel from './AutomationPanel';
 import { uncertainAssessmentToken } from '../shared/review-assessment';
 import ReviewAdvice from './ReviewAdvice';
 import ToolCalls from './ToolCalls';
@@ -397,6 +398,7 @@ export default function RunDetail({ run, events, busy, onAction, onBack, onMessa
 
       {selectedStep && !selectedStep.definition.validation && run.steps.some(s=>s.validation) && <details className="validation-summary"><summary>Validation evidence and Jev signals</summary>{run.steps.filter(s=>s.validation).map(s=><ValidationPanel key={s.definition.id} evidence={s.validation!}/>)}</details>}
       {run.git && <GitRunPanel run={run} />}
+      <AutomationPanel run={run} />
       {selectedStep && <ReviewAdvice run={run} step={selectedStep} onDraft={text => { setDraftSuggestion({stepId:selectedStep.definition.id,text,nonce:Date.now()}); setTab('output'); }} />}
       {showFooter ? (
         <footer className="approval-bar">

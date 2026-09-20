@@ -6,7 +6,7 @@ import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createApp } from '../src/server/app.js';
 import { councilWorkflow } from '../src/server/templates.js';
-import { parseCouncilReport } from '../src/server/council.js';
+import { parseCouncilReport, unresolvedCouncilFindings, councilSummary } from '../src/server/council.js';
 import type { Run } from '../src/shared/types.js';
 
 const passing = () => ({ verdict: 'PASS', summary: 'AC1 verified against source and recorded check.', criteria: [{ id: 'AC1', status: 'met', evidence: ['app.txt:1 contains fixed; recorded check exit 0'] }], findings: [], resolutions: [] });
@@ -51,6 +51,7 @@ test('council uses three isolated contexts, freezes evidence, persists reports a
   const f = await fixture(); try {
     const run = await f.start(); const final = await f.finish(run.id);
     assert.equal(final.status, 'waiting_approval'); assert.equal(final.steps[3].council?.status, 'pass'); assert.deepEqual(final.steps[3].council?.changes?.modified,['app.txt']);
+    for(const member of final.steps[3].council!.reviewers){assert.match(member.output,/Inspecting AC1/);assert.match(member.output,/Evidence collected/);assert.equal(member.toolCalls?.[0].outputOffset,'Inspecting AC1.\n'.length);}
     const reviewers = f.prompts.filter(p => p.id.startsWith('council-') && p.id !== 'council-chair');
     assert.equal(reviewers.length, 3); assert.equal(new Set(reviewers.map(p => p.workspace)).size, 3);
     for (const review of reviewers) { assert.notEqual(review.workspace, final.workspace); assert.match(review.prompt, /RECORDED AC1/); assert.doesNotMatch(review.prompt, /Initial reports \(untrusted evidence\)/); assert.equal(await readFile(path.join(review.workspace, 'app.txt'), 'utf8'), 'fixed'); }
@@ -162,15 +163,16 @@ test('retrying an interrupted challenge retains original blockers and consumes t
 });
 
 
-for(const phase of ['initial','challenge'])test(`completed ${phase} blocker survives another member being interrupted`,async()=>{
+for(const phase of ['initial','challenge','stale_challenge'])test(`completed ${phase} blocker survives another member being interrupted`,async()=>{
  const f=await fixture();try{
   f.mode(phase==='initial'?'partial_initial':'block');const run=await f.start();
-  if(phase==='challenge'){await f.finish(run.id);f.mode('partial_challenge');f.app.engine.chat(run.id,'review','Check the evidence.','partial');}
-  await f.wait(run.id,r=>{const council=r.steps[3].council;return (phase==='challenge'?council?.challenge?.reviewers:council?.reviewers)?.[2].status==='completed';});
+  if(phase!=='initial'){await f.finish(run.id);f.mode('partial_challenge');f.app.engine.chat(run.id,'review','Check the evidence.','partial');}
+  await f.wait(run.id,r=>{const council=r.steps[3].council;return (phase!=='initial'?council?.challenge?.reviewers:council?.reviewers)?.[2].status==='completed';});
   await f.app.engine.shutdown();
+  if(phase==='stale_challenge')await writeFile(path.join(f.app.store.getRun(run.id)!.workspace,'extra.txt'),'changed');
   const {Engine}=await import('../src/server/engine.js');const executed:string[]=[];
   const retry=new Engine(f.app.store,{dataDir:path.join(f.root,'data'),workspaceRoot:path.join(f.root,'work'),host:'127.0.0.1',port:0,cliTimeoutMs:1000,maxOutputBytes:100000},async step=>{executed.push(step.id);return {output:JSON.stringify(step.id==='council-chair'?{summary:'Retained findings.',disputes:[]}:passing()),sessionId:null,costUsd:null};});
-  try{retry.retry(run.id);const final=await f.finish(run.id);assert.equal(final.status,'blocked');assert.ok(!executed.includes('council-adversarial'));const evidence=final.steps[3].council!;assert.equal((phase==='challenge'?evidence.challenge!.reviewers:evidence.reviewers)[2].report!.findings[0].id,phase==='challenge'?'F2':'F1');}finally{await retry.shutdown();}
+  try{retry.retry(run.id);const final=await f.finish(run.id);assert.equal(final.status,'blocked');assert.ok(!executed.includes('council-adversarial'));const evidence=final.steps[3].council!;assert.equal((phase!=='initial'?evidence.challenge!.reviewers:evidence.reviewers)[2].report!.findings[0].id,phase!=='initial'?'F2':'F1');if(phase==='stale_challenge'){assert.equal(evidence.status,'stale');assert.deepEqual(unresolvedCouncilFindings(evidence)[0].findings.map(f=>f.id),['F2']);assert.match(councilSummary(evidence),/New challenge blocker/);}}finally{await retry.shutdown();}
  }finally{await f.close();}
 });
 
@@ -178,6 +180,8 @@ test('repair handoffs carry unresolved blockers across revisions until explicit 
  const f=await fixture();try{
   f.mode('block');const run=await f.start();await f.finish(run.id);f.mode('pass');f.app.engine.rework(run.id);
   let final=await f.finish(run.id);assert.equal(final.status,'blocked');assert.match(final.steps[3].council!.reviewers[2].error!,/earlier revision/);
+  assert.match(councilSummary(final.steps[3].council!),/Incorrect value/);
   f.mode('resolve');f.app.engine.rework(run.id);final=await f.finish(run.id);assert.equal(final.status,'waiting_approval');assert.equal(final.steps[3].council!.reviewers[2].report?.resolutions[0].findingId,'F1');
+  assert.match(f.prompts.filter(p=>p.id==='build').at(-1)!.prompt,/Incorrect value/);
  }finally{await f.close();}
 });
