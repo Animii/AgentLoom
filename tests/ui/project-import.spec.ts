@@ -10,7 +10,7 @@ test('select a folder, import a project, preserve run draft and start a run from
  const {createApp}=await import(pathToFileURL(path.resolve('dist/server/app.js')).href);const work=path.join(root,'work');
  const app=await createApp({dataDir:path.join(root,'data'),workspaceRoot:work,host:'127.0.0.1',port:0,cliTimeoutMs:1000,maxOutputBytes:1000});
  try{
-  const address=await app.listen({port:0,host:'127.0.0.1'});await page.goto(address);await page.getByRole('button',{name:'New run',exact:true}).first().click();
+  const address=await app.listen({port:0,host:'127.0.0.1'});await page.goto(address+'/?view=runs');await page.getByRole('button',{name:'New run',exact:true}).first().click();
   const dialog=page.getByRole('dialog');await dialog.getByLabel('Task title',{exact:true}).fill('Imported game review');await dialog.getByLabel('Task brief',{exact:true}).fill('Review the imported code');
   await dialog.getByRole('button',{name:'Import a copy'}).click();
   const chooserPromise=page.waitForEvent('filechooser');await dialog.getByRole('button',{name:'Choose folder',exact:true}).click();const chooser=await chooserPromise;await chooser.setFiles(source);

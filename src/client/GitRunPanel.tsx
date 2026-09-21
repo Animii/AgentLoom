@@ -14,12 +14,12 @@ export default function GitRunPanel({run}:{run:Run}) {
   {error&&<p className="error-banner" role="alert">{error}</p>}
   <button type="button" className="btn ghost" disabled={busy} onClick={()=>void load()}>Refresh diff</button>
   {preview&&<><pre className="git-diff-stat">{preview.stat||'No changes yet.'}</pre><details><summary>View patch</summary><pre className="git-diff">{preview.diff||'No changes.'}</pre></details></>}
-  {url?<p><a href={url} target="_blank" rel="noreferrer">Open draft pull request</a></p>:preview&&<form onSubmit={event=>{event.preventDefault();void publish();}}>
+  {url&&<p><a href={url} target="_blank" rel="noreferrer">Open draft pull request</a></p>}{(!url||run.crate?.updatingPr)&&preview&&<form onSubmit={event=>{event.preventDefault();void publish();}}>
    <div className="field"><label htmlFor="pr-title">PR title</label><input id="pr-title" value={title} maxLength={200} onChange={event=>setTitle(event.target.value)} /></div>
    <div className="field"><label htmlFor="pr-description">PR description</label><textarea id="pr-description" rows={7} value={body} maxLength={30000} onChange={event=>setBody(event.target.value)} /></div>
    <p className="field-helper">Review the patch and description. Creating a draft PR commits these changes and pushes only this run's branch. It does not merge anything.</p>
    {preview.reason&&<p>{preview.reason}</p>}
-   <button type="submit" className="btn primary" disabled={busy||!preview.canPublish||!title.trim()||run.git.publishing}>{busy?'Working…':'Create draft PR'}</button>
+   <button type="submit" className="btn primary" disabled={busy||!preview.canPublish||!title.trim()||run.git.publishing}>{busy?'Working…':run.crate?.updatingPr?'Update draft PR':'Create draft PR'}</button>
    <details><summary>GitHub authentication</summary><p>Sign in once from a terminal; credentials stay in the agent home volume.</p><code>docker compose exec platform gh auth login --hostname github.com --git-protocol https --web</code></details>
   </form>}
  </details>;

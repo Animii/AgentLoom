@@ -66,7 +66,7 @@ export async function previewRunGit(run:Run,config:AppConfig):Promise<GitPreview
  const stat=await git(cwd,['diff','--no-ext-diff','--no-textconv','--stat',meta.baseCommit,tree]);
  const diff=await git(cwd,['diff','--no-ext-diff','--no-textconv','--no-renames',meta.baseCommit,tree]);
  const token=createHash('sha256').update(`${head}:${tree}:${meta.baseCommit}`).digest('hex');
- const reason=run.mode!=='live'?'Demo runs cannot publish pull requests.':run.status!=='completed'?'Approve every workflow step before creating a PR.':!meta.repository?'The source repository needs a GitHub origin remote before starting a PR-enabled run.':!diff?'There are no changes relative to the run base.':meta.prUrl?'A PR already exists for this run.':undefined;
+ const reason=run.mode!=='live'?'Demo runs cannot publish pull requests.':run.status!=='completed'?'Approve every workflow step before creating a PR.':!meta.repository?'The source repository needs a GitHub origin remote before starting a PR-enabled run.':!diff?'There are no changes relative to the run base.':meta.prUrl&&!run.crate?.updatingPr?'A PR already exists for this run.':undefined;
  return {...meta,head,tree,token,stat,diff,title:run.title,body:`## Task\n${run.task}\n\n## Validation and review\n${run.steps.map(s=>`### ${s.definition.name}\n${s.output}`).join('\n\n')}`.slice(0,30000),canPublish:!reason,reason};
 }
 export interface PublishInput {token:string;title:string;body:string}
@@ -84,8 +84,9 @@ export async function publishDraftPr(run:Run,config:AppConfig,input:PublishInput
   const pr=existing[0];
   if(pr.state!=='OPEN'||pr.baseRefName!==run.git!.baseBranch||! /^[a-f0-9]{40}$/.test(pr.headRefOid))throw Error('An existing PR has a different state or base. Inspect it on GitHub before continuing.');
   const remoteCommit=JSON.parse(await gh(['api',`repos/${repository}/git/commits/${pr.headRefOid}`],cwd)) as {tree?:{sha?:string}};
-  if(remoteCommit.tree?.sha!==run.git!.approvedTree)throw Error('The existing PR does not contain the approved Git tree.');
-  return {url:validPrUrl(pr.url,repository),commit:pr.headRefOid};
+  if(remoteCommit.tree?.sha===run.git!.approvedTree)return {url:validPrUrl(pr.url,repository),commit:pr.headRefOid};
+  if(!run.crate?.updatingPr || pr.headRefOid!==run.git!.publishedCommit)throw Error('The existing PR changed outside this crate. Refresh and inspect its current commit.');
+  validPrUrl(pr.url,repository);
  }
  let commit=preview.head;
  if((await git(cwd,['rev-parse',`${preview.head}^{tree}`])).trim()!==preview.tree){
@@ -97,7 +98,47 @@ export async function publishDraftPr(run:Run,config:AppConfig,input:PublishInput
  // Only push this run's dedicated branch. No force push, merge, or default-branch update.
  const remote=`https://github.com/${repository}.git`, ref=`${commit}:refs/heads/${branch}`;
  if(transport)await transport.push(cwd,remote,ref);else await git(cwd,['-c','credential.helper=','-c','credential.helper=!gh auth git-credential','push',remote,ref]);
+ if(existing.length)return {url:validPrUrl(existing[0].url,repository),commit};
  const folder=await mkdtemp(path.join(tmpdir(),'agentloom-pr-'));
  try{const bodyFile=path.join(folder,'body.md');await writeFile(bodyFile,input.body,'utf8');const output=await gh(['pr','create','--repo',repository,'--head',branch,'--base',run.git!.baseBranch,'--draft','--title',input.title,'--body-file',bodyFile],cwd);return {url:validPrUrl(output.trim(),repository),commit};}finally{await rm(folder,{recursive:true,force:true});}
 }
 function validPrUrl(url:string,repository:string){if(!url.startsWith(`https://github.com/${repository}/pull/`)||!/^\d+$/.test(url.split('/').at(-1)??''))throw new Error('GitHub returned an unexpected PR URL.');return url;}
+
+/** Construct every merge off-index before changing the parent worktree. Conflicts leave it untouched. */
+export async function joinCrateWorktrees(parent:Run,children:Run[],config:AppConfig):Promise<string>{
+ const cwd=await verifyWorkspace(parent,config);
+ if((await git(cwd,['status','--porcelain'])).trim())throw Error('The parent worktree must be clean before joining.');
+ const head=(await git(cwd,['rev-parse','HEAD'])).trim();let combined=head;
+ for(const child of children){
+  if(child.status!=='completed'||child.git?.baseCommit!==parent.git!.baseCommit)throw Error('Each child must be approved and share the parent base.');
+  const preview=await previewRunGit(child,config);
+  if(preview.tree!==child.git?.approvedTree)throw Error('A child changed after approval. Revalidate and approve its current files.');
+  const commit=async(tree:string,parents:string[]) => (await git(cwd,['-c','user.name=AgentLoom','-c','user.email=agentloom@localhost','commit-tree',tree,...parents.flatMap(p=>['-p',p]),'-m',`Join child crate ${child.id}`])).trim();
+  const childCommit=await commit(preview.tree,[child.git.baseCommit]);
+  let tree:string;
+  try{tree=(await git(cwd,['merge-tree','--write-tree',combined,childCommit])).trim().split('\n')[0];}catch{throw Error(`Child "${child.title}" conflicts with the combined changes. Parent files are unchanged. Resolve the child scope or changes and retry.`);}
+  combined=await commit(tree,[combined,childCommit]);
+ }
+ if((await git(cwd,['rev-parse','HEAD'])).trim()!==head || (await git(cwd,['status','--porcelain'])).trim())throw Error('The parent changed during integration. Retry after inspecting it.');
+ await git(cwd,['merge','--ff-only',combined]);return combined;
+}
+
+export async function readCratePr(run:Run):Promise<{state:'OPEN'|'CLOSED'|'MERGED';head:string;events:{id:string;head:string;kind:'review'|'ci';summary:string}[]}>{
+ if(!run.git?.prUrl||!run.git.repository)throw Error('This crate has no GitHub PR.');
+ validPrUrl(run.git.prUrl,run.git.repository);
+ const data=JSON.parse(await command('gh',['pr','view',run.git.prUrl,'--json','state,headRefOid,reviews,statusCheckRollup'],run.workspace)) as {state:string;headRefOid:string;reviews?:{id:string;state:string;body:string;commit?:{oid:string}}[];statusCheckRollup?:{__typename:string;name?:string;context?:string;conclusion?:string;state?:string;detailsUrl?:string;targetUrl?:string;completedAt?:string}[]};
+ if(!['OPEN','CLOSED','MERGED'].includes(data.state)||!/^[a-f0-9]{40}$/.test(data.headRefOid))throw Error('GitHub returned invalid PR state.');
+ const events:{id:string;head:string;kind:'review'|'ci';summary:string}[]=[];
+ const number=run.git.prUrl.split('/').at(-1)!;
+ const reviews=(JSON.parse(await command('gh',['api','--paginate','--slurp',`repos/${run.git.repository}/pulls/${number}/reviews`],run.workspace)) as {id:number;state:string;body:string;commit_id:string;user:{login:string}}[][]).flat();
+ const comments=(JSON.parse(await command('gh',['api','--paginate','--slurp',`repos/${run.git.repository}/pulls/${number}/comments`],run.workspace)) as {pull_request_review_id:number;path:string;line:number|null;body:string}[][]).flat();
+ const latestByAuthor=new Map<string,typeof reviews[number]>();
+ for(const review of reviews)latestByAuthor.set(review.user.login,review);
+ for(const review of latestByAuthor.values())if(['CHANGES_REQUESTED','COMMENTED'].includes(review.state)){
+  const inline=comments.filter(c=>c.pull_request_review_id===review.id).map(c=>`${c.path}${c.line?':'+c.line:''}: ${c.body}`).join('\n');
+  if(review.state==='COMMENTED'&&!review.body.trim()&&!inline)continue;
+  events.push({id:`review:${review.id}`,head:review.commit_id,kind:'review',summary:`${review.state}: ${review.body}\n${inline}`.slice(0,8000)});
+ }
+ for(const check of data.statusCheckRollup??[])if(['FAILURE','TIMED_OUT','CANCELLED','ACTION_REQUIRED','ERROR'].includes(check.conclusion??check.state??''))events.push({id:createHash('sha256').update(JSON.stringify(check)+data.headRefOid).digest('hex'),head:data.headRefOid,kind:'ci',summary:`${check.name??check.context??'CI check'}: ${check.conclusion??check.state}. ${check.detailsUrl??check.targetUrl??''}`.slice(0,8000)});
+ return {state:data.state as 'OPEN'|'CLOSED'|'MERGED',head:data.headRefOid,events};
+}

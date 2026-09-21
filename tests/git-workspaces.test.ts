@@ -7,8 +7,43 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {checkGitSource,prepareGitWorkspace,previewRunGit,publishDraftPr,githubRepository} from '../src/server/git-workspaces.js';
 import type {Run,AppConfig,RunGit} from '../src/shared/types.js';
+import { joinCrateWorktrees } from '../src/server/git-workspaces.js';
+import { newCrate } from '../src/shared/crates.js';
 const exec=promisify(execFile);
 const git=async(cwd:string,...args:string[])=>(await exec('git',args,{cwd,windowsHide:true})).stdout.trim();
+
+test('crate join combines approved child trees and conflicts leave parent files unchanged',async()=>{
+ const f=await fixture();try{
+  const parent=await f.prepare('parent'),a=await f.prepare('child-a'),b=await f.prepare('child-b');
+  await writeFile(path.join(a.workspace,'api.txt'),'API\n');await writeFile(path.join(b.workspace,'ui.txt'),'UI\n');
+  a.git!.approvedTree=(await previewRunGit(a,f.config)).tree;b.git!.approvedTree=(await previewRunGit(b,f.config)).tree;
+  await joinCrateWorktrees(parent,[a,b],f.config);
+  assert.equal((await readFile(path.join(parent.workspace,'api.txt'),'utf8')).trim(),'API');assert.equal((await readFile(path.join(parent.workspace,'ui.txt'),'utf8')).trim(),'UI');assert.equal(await git(parent.workspace,'status','--porcelain'),'');
+  const other=await f.prepare('conflict-parent'),c=await f.prepare('conflict-a'),d=await f.prepare('conflict-b');
+  await writeFile(path.join(c.workspace,'app.txt'),'first conflict\n');await writeFile(path.join(d.workspace,'app.txt'),'second conflict\n');
+  c.git!.approvedTree=(await previewRunGit(c,f.config)).tree;d.git!.approvedTree=(await previewRunGit(d,f.config)).tree;
+  const head=await git(other.workspace,'rev-parse','HEAD');await assert.rejects(joinCrateWorktrees(other,[c,d],f.config),/conflicts/);
+  assert.equal(await git(other.workspace,'rev-parse','HEAD'),head);assert.equal(await readFile(path.join(other.workspace,'app.txt'),'utf8'),'original\n');assert.equal(await git(other.workspace,'status','--porcelain'),'');
+ }finally{await f.close();}
+});
+
+test('crate repair updates the existing PR branch once and rejects external remote changes',async()=>{
+ const f=await fixture();try{
+  const run=await f.prepare('pr-update');run.crate=newCrate();run.crate.updatingPr=true;
+  run.git!.prUrl='https://github.com/fixture/project/pull/8';run.git!.publishedCommit=await git(run.workspace,'rev-parse','HEAD');
+  const old=run.git!.publishedCommit,oldTree=await git(run.workspace,'rev-parse','HEAD^{tree}');let remote=old,pushes=0;
+  await writeFile(path.join(run.workspace,'app.txt'),'repaired\n');const preview=await previewRunGit(run,f.config);run.git!.approvedTree=preview.tree;
+  const transport={gh:async(args:string[])=>{
+   if(args[0]==='auth')return '';
+   if(args[1]==='list')return JSON.stringify([{url:run.git!.prUrl,headRefOid:remote,state:'OPEN',baseRefName:'main'}]);
+   if(args[1]==='user')return '{"login":"fixture","id":123}';
+   if(args[0]==='api')return JSON.stringify({tree:{sha:oldTree}});
+   throw Error('Must not create a second PR');
+  },push:async(_cwd:string,_url:string,ref:string)=>{pushes++;remote=ref.split(':')[0];}};
+  const result=await publishDraftPr(run,f.config,{token:preview.token,title:'Repair',body:''},transport);assert.equal(result.url,run.git!.prUrl);assert.equal(pushes,1);assert.notEqual(result.commit,old);
+  remote='b'.repeat(40);const current=await previewRunGit(run,f.config);await assert.rejects(publishDraftPr(run,f.config,{token:current.token,title:'Repair',body:''},transport),/changed outside/);assert.equal(pushes,1);
+ }finally{await f.close();}
+});
 async function fixture(){
  const root=await mkdtemp(path.join(tmpdir(),'loom-git-'));const source=path.join(root,'source');await mkdir(source);
  await git(source,'init','-b','main');await git(source,'config','user.name','Fixture');await git(source,'config','user.email','fixture@example.invalid');

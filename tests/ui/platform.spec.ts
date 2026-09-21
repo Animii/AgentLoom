@@ -10,7 +10,7 @@ async function createDemo(page:Page,title:string,workflow:string){
  await expect(page.locator('.detail-title')).toHaveText(title);
 }
 test('gated four-role workflow with revision, activity, files and final approval',async({page})=>{
- const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('/');
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('/?view=runs');
  await createDemo(page,`E2E gated ${stamp}`,'review-build');
  await expect(page.locator('.detail-status .status-waiting_input')).toBeVisible();
  await expect(page.getByRole('button',{name:'Approve plan and continue'})).toHaveCount(0);
@@ -34,13 +34,13 @@ test('gated four-role workflow with revision, activity, files and final approval
  await expect(page.locator('.detail-title')).toHaveText(`E2E gated ${stamp}`);expect(errors).toEqual([]);
 });
 test('automatic review finishes without approvals; second gated approach can be cancelled',async({page})=>{
- await page.goto('/');await createDemo(page,`E2E automatic ${stamp}`,'quick-review');await expect(page.locator('.detail-status .status-completed')).toBeVisible();
+ await page.goto('/?view=runs');await createDemo(page,`E2E automatic ${stamp}`,'quick-review');await expect(page.locator('.detail-status .status-completed')).toBeVisible();
  await expect(page.getByRole('button',{name:'Approve and continue'})).toHaveCount(0);
  await createDemo(page,`E2E cancelled ${stamp}`,'fix-verify');await expect(page.getByRole('button',{name:'Approve and continue'})).toBeVisible();
  await page.locator('.approval-bar').getByRole('button',{name:'Cancel',exact:true}).click();await expect(page.locator('.detail-status .status-cancelled')).toBeVisible();
 });
 test('workflow editing persists; provider discovery and narrow layout work',async({page})=>{
- await page.goto('/');await page.getByRole('button',{name:'Workflows',exact:true}).click();
+ await page.goto('/?view=runs');await page.getByRole('button',{name:'Workflows',exact:true}).click();
  await page.getByLabel('Description',{exact:true}).fill('Local workflow validated by browser E2E.');await page.getByRole('button',{name:'Save workflow',exact:true}).click();
  await expect(page.getByRole('status')).toContainText(/saved/i);await page.reload();await page.getByRole('button',{name:'Workflows',exact:true}).click();await expect(page.getByLabel('Description',{exact:true})).toHaveValue('Local workflow validated by browser E2E.');
  await page.getByRole('button',{name:'Agents',exact:true}).click();await expect(page.getByRole('heading',{name:'Agent connections'})).toBeVisible();await expect(page.locator('.provider-card')).toHaveCount(3);
@@ -53,7 +53,7 @@ test('failed workspace preparation is visible and explicit retry recovers',async
  const {mkdir,writeFile,unlink,rmdir}=await import('node:fs/promises');const path=await import('node:path');
  const project=`e2e-recovery-${Date.now()}`;const projectPath=path.resolve(process.env.E2E_WORKSPACE_ROOT??'workspaces','projects',project);
  const title=`E2E retry ${Date.now()}`;const created=await request.post('/api/runs',{data:{title,task:'Exercise failure recovery only.',project,workflowId:'quick-review',mode:'demo'}});expect(created.status()).toBe(201);
- await page.goto('/');await page.getByRole('button').filter({hasText:title}).first().click();await expect(page.locator('.detail-status .status-failed')).toBeVisible();await expect(page.locator('.run-detail')).toContainText('Workspace preparation failed');
+ await page.goto('/?view=runs');await page.getByRole('button').filter({hasText:title}).first().click();await expect(page.locator('.detail-status .status-failed')).toBeVisible();await expect(page.locator('.run-detail')).toContainText('Workspace preparation failed');
  await mkdir(projectPath);await writeFile(path.join(projectPath,'README.md'),'Recovery fixture');
  try {await page.getByRole('button',{name:'Retry step',exact:true}).click();await expect(page.locator('.detail-status .status-completed')).toBeVisible();await page.getByRole('tab',{name:'Activity',exact:true}).click();await page.getByRole('button',{name:'All events',exact:true}).click();await expect(page.locator('.activity-list')).toContainText('Run queued for retry');}
  finally {await unlink(path.join(projectPath,'README.md'));await rmdir(projectPath);}

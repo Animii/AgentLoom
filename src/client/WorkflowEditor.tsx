@@ -218,6 +218,7 @@ export default function WorkflowEditor({
             />
           </label>
 
+          <label className="wf-checkbox"><input type="checkbox" checked={draft.allowSplit??false} onChange={event=>patchDraft({allowSplit:event.target.checked})}/>Allow crates to split into child worktrees after planning</label>
           <ol className="wf-steps">
             {draft.steps.map((step, index) => (
               <li key={step.id}>

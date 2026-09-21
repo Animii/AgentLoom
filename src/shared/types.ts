@@ -1,4 +1,5 @@
 import type { CouncilEvidence, CouncilMember } from './council.js';
+import type { CrateState } from './crates.js';
 export type ProviderId = 'claude' | 'codex' | 'opencode';
 export type RunStatus = 'queued' | 'running' | 'waiting_input' | 'waiting_approval' | 'blocked' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
 export type StepStatus = 'pending' | 'running' | 'waiting_input' | 'waiting_approval' | 'blocked' | 'completed' | 'failed' | 'cancelled';
@@ -7,7 +8,7 @@ export interface ValidationResult { command: ValidationCommand; status: "running
 export interface ValidationSignals { status: "ready" | "failed" | "unavailable" | "simulated"; model?: string; message?: string; claimsSupported?: number; scopeDrift?: number; needsHuman?: number }
 export interface ValidationEvidence { attempt: number; status: "running" | "passed" | "failed" | "simulated"; before: string; after?: string; commands: ValidationResult[]; signals?: ValidationSignals; startedAt: string; finishedAt?: string }
 export interface StepDefinition { council?: { reviewers: CouncilMember[]; secondOpinion?: CouncilMember }; validation?: { commands: ValidationCommand[] }; id: string; name: string; role: string; provider: ProviderId; model: string; effort: string; instructions: string; access: 'read-only' | 'workspace-write'; approval: boolean; planning?: boolean }
-export interface Workflow { id: string; name: string; description: string; steps: StepDefinition[]; updatedAt: string }
+export interface Workflow { allowSplit?:boolean; id: string; name: string; description: string; steps: StepDefinition[]; updatedAt: string }
 export interface PlanningQuestion { question: string; header?: string; multiSelect?: boolean; options?: (string | { label: string; description?: string; recommended?: boolean })[] }
 export interface PlanningMessage { id: string; role: 'user' | 'assistant'; content: string; createdAt: string; questions?: PlanningQuestion[] }
 export interface PlanningToolCall { outputOffset?: number; id: string; name: string; status: 'running' | 'completed' | 'failed' | 'unknown'; input: Record<string, string | number | boolean>; summary?: string; startedAt: string; finishedAt?: string; turnId?: string }
@@ -20,7 +21,7 @@ export interface GitPreview { branch: string; baseBranch: string; baseCommit: st
 export interface SourceBaseline { fingerprint:string; files:{path:string;hash:string}[] }
 export interface AutomationDecision { offeredActions?: string[]; at:string; inputHash:string; choice:string; confidence:number; model?:string; probabilities?:Record<string,number>; appliedAt?:string; action:string; reason:string }
 export interface RunAutomation { escalation?: AgentExecution & {used: boolean; stepId?: string}; version:1; publication:'manual'|'draft'; status:'awaiting_plan'|'active'|'deciding'|'paused'|'publishing'|'done'; approvedAt?:string; contractHash?:string; repairsUsed:number; maxRepairs:2; message:string; decisions:AutomationDecision[] }
-export interface Run { automation?:RunAutomation; sourceBaseline?:SourceBaseline; git?: RunGit; id: string; title: string; task: string; project: string; projectLocation?: ManagedProject; workflowId: string; workflowName: string; mode: 'live' | 'demo'; status: RunStatus; steps: StepRun[]; currentStep: number; createdAt: string; updatedAt: string; workspace: string; error: string | null }
+export interface Run { crate?:CrateState; automation?:RunAutomation; sourceBaseline?:SourceBaseline; git?: RunGit; id: string; title: string; task: string; project: string; projectLocation?: ManagedProject; workflowId: string; workflowName: string; mode: 'live' | 'demo'; status: RunStatus; steps: StepRun[]; currentStep: number; createdAt: string; updatedAt: string; workspace: string; error: string | null }
 export interface RunEvent { id: number; runId: string; stepId: string | null; timestamp: string; type: 'status' | 'log' | 'output' | 'approval' | 'revision' | 'error'; message: string }
 export interface ProviderInfo { id: ProviderId; name: string; installed: boolean; version: string | null; authentication: 'not_checked'; error: string | null; suggestedModel: string; efforts: string[]; loginCommand: string }
 export interface ProjectInfo { id: string; name: string; sourcePath?: string; hostPath?: string; folder?: string; kind?: 'connected' | 'imported'; workspaceMode?: 'direct' | 'isolated' | 'worktree'; status?: 'active' | 'archived' | 'disconnected'; available?: boolean; runCount?: number }

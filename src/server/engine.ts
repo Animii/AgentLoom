@@ -1,4 +1,5 @@
 import { FABLE_REPAIR, supportsEscalation, canEscalate, implementationDefinition, secondOpinionAvailable } from '../shared/automation.js';
+import { newCrate, needsTriage, triagePassed, triageKey } from '../shared/crates.js';
 import { automationContract } from './automation-contract.js';
 import { writeEvidencePacket } from './evidence-packet.js';
 import { runCouncil, councilSummary, assertCouncilCurrent, approvedReviewCriteria } from './council.js';
@@ -96,6 +97,7 @@ export class Engine {
     expectedWorkspaceMode?: 'direct' | 'isolated' | 'worktree';
     workflowId: string;
     mode: 'live' | 'demo';
+    crate?: boolean;
     automation?: {publication:'manual'|'draft';escalation?:'fable'};
   }): Promise<Run> {
     const workflow = this.store.getWorkflow(input.workflowId);
@@ -117,8 +119,8 @@ export class Engine {
       workflowName: workflow.name,
       mode: input.mode,
       status: 'queued',
-      steps: workflow.steps.map((definition) => ({
-        definition: { ...definition, planning: isPlanningStep(definition), ...(isPlanningStep(definition) ? { access: 'read-only' as const, approval: true } : {}) },
+      steps: workflow.steps.map((definition,index) => ({
+        definition: { ...definition, planning: isPlanningStep(definition), ...(input.crate&&index===workflow.steps.length-1?{approval:true}:{}), ...(isPlanningStep(definition) ? { access: 'read-only' as const, approval: true } : {}) },
         status: 'pending',
         attempt: 0,
         output: '',
@@ -134,6 +136,7 @@ export class Engine {
       updatedAt: now,
       workspace: '',
       error: null,
+      ...(input.crate ? {crate:{...newCrate(),allowSplit:workflow.allowSplit??false}} : {}),
     };
     if(input.automation)run.automation={...(input.automation.escalation?{escalation:{...FABLE_REPAIR,used:false}}:{}),version:1,publication:input.automation.publication,status:'awaiting_plan',repairsUsed:0,maxRepairs:2,message:input.automation.escalation?'Approve the plan to authorize two Flash repairs, then one Fable rescue with independent Astra review.':'Approve the plan to authorize up to two repairs and the selected delivery policy.',decisions:[]};
     this.projects.assertNoConflict(run);
@@ -158,6 +161,8 @@ export class Engine {
 
   approve(id: string, acknowledgedAssessment?: string, actor: 'user'|'controller' = 'user'): Run {
     const run = this.requireRun(id);
+    if (run.crate?.join === 'waiting' || run.crate?.joining) throw Error('Join the approved child crates before continuing the parent.');
+    if (actor === 'user' && needsTriage(run) && !triagePassed(run)) throw Error('Triage the review findings before approval.');
     if (run.status !== 'waiting_approval') {
       throw new Error(`Cannot approve run in status "${run.status}"`);
     }
@@ -230,8 +235,11 @@ export class Engine {
     return run;
   }
 
-  rework(id: string, automated: boolean | 'escalate' = false): Run {
+  rework(id: string, automated: boolean | 'escalate' = false, fromTriage=false): Run {
     const run = this.requireRun(id);
+    if(run.crate&&!automated&&!fromTriage)throw Error('Route crate findings through triage before starting repairs.');
+    if (run.crate?.joining || run.crate?.join === 'waiting') throw Error('Join child crates before repairing the parent.');
+    if (run.git?.publishing) throw Error('Wait for publication to finish.');
     const target = reworkTarget(run);
     if (target < 0) throw new Error('This step has no eligible completed implementation to return to.');
     if(automated && (!run.automation?.approvedAt || automationContract(run)!==run.automation.contractHash))throw Error('Automatic repair is not authorized for this plan.');
@@ -282,7 +290,8 @@ export class Engine {
 
   chat(id: string, stepId: string, text: string, messageId: string): Run {
     const run = this.requireRun(id);
-    if(run.git?.publishing || run.git?.prUrl) throw new Error('This run is publishing or already has a PR. Start a new run for follow-up work.');
+    if(run.crate?.join === 'waiting' || run.crate?.joining) throw Error('Finish and join the child crates before revising the parent.');
+    if(run.git?.publishing || (run.git?.prUrl && !run.crate?.updatingPr)) throw new Error('Triage PR feedback before starting follow-up work.');
     const content = text.trim();
     if (!content || content.length > 8000) throw new Error('Message must contain between 1 and 8000 characters.');
     const step = run.steps.find(candidate => candidate.definition.id === stepId);
@@ -441,6 +450,57 @@ export class Engine {
       job.controller.abort();
     }
     await Promise.allSettled(pending);
+  }
+
+  splitCrate(id:string, children:{title:string;task:string}[]):Run {
+    const parent=this.requireRun(id), plan=parent.steps[parent.currentStep];
+    if(!parent.crate?.allowSplit || parent.crate.parentId || parent.crate.childIds.length || parent.currentStep!==0 || !plan?.definition.planning || parent.status!=='waiting_approval' || plan.pendingAskId)throw Error('This workflow must allow splitting. Split a root crate at its completed planning gate, before approval.');
+    if(parent.automation)throw Error('Use a manual delivery workflow for split crates.');
+    if(parent.mode==='live' && (!parent.git || parent.projectLocation?.workspaceMode!=='worktree'))throw Error('Splitting live work requires isolated Git worktrees.');
+    if(children.length<2||children.length>4||parent.steps.length<2)throw Error('Define between two and four child crates in a workflow with work after planning.');
+    const now=new Date().toISOString();
+    const runs:Run[]=children.map(child=>{
+      const childId=randomUUID();
+      return {...parent,id:childId,title:child.title,task:`Parent task:\n${parent.task}\n\nParent plan:\n${plan.output}\n\nApproved child scope:\n${child.task}\n\nWork only within the child scope. Preserve the parent acceptance criteria.`,createdAt:now,updatedAt:now,status:'queued',currentStep:0,workspace:'',error:null,sourceBaseline:undefined,automation:undefined,
+        git:parent.git?{branch:`agentloom/${childId}`,baseBranch:parent.git.baseBranch,baseCommit:parent.git.baseCommit,repository:parent.git.repository}:undefined,
+        crate:{...newCrate(),parentId:id},steps:parent.steps.map(s=>({definition:structuredClone(s.definition),status:'pending',attempt:0,output:'',error:null,sessionId:null,feedback:'',startedAt:null,finishedAt:null,costUsd:null}))};
+    });
+    if(runs.some(r=>r.task.length>30000))throw Error('The combined parent context and child scope exceeds 30,000 characters. Shorten the plan before splitting.');
+    parent.crate.childIds=runs.map(r=>r.id);parent.crate.join='waiting';
+    plan.status='completed';parent.currentStep=1;parent.status='waiting_input';
+    this.store.saveRuns([parent,...runs]);this.emitEvent(id,plan.definition.id,'approval','Parent plan and child scopes approved by splitting the crate.');this.emitEvent(id,null,'status',`Split into ${runs.length} child crates. Parent waits for approved results and integration.`);this.schedule();return parent;
+  }
+
+  resumeJoinedCrate(id:string):Run {
+    const run=this.requireRun(id);
+    if(run.crate?.join!=='joined'||run.status!=='waiting_input')throw Error('This crate is not waiting at integration.');
+    run.status='queued';run.error=null;this.persist(run);this.schedule();return run;
+  }
+
+  triage(id:string, action:'approve'|'repair'|'clarify', reason:string):Run {
+    const run=this.requireRun(id);
+    if(!needsTriage(run))throw Error('The crate has no completed review to triage.');
+    if(!reason.trim())throw Error('Record the reason for this routing decision.');
+    if(action==='approve' && run.status!=='waiting_approval')throw Error('Resolve blockers before routing to approval.');
+    if(action==='repair' && reworkTarget(run)<0)throw Error('No eligible implementer is available.');
+    run.crate!.triage.push({key:triageKey(run),action,reason:reason.trim(),at:new Date().toISOString()});
+    this.persist(run);this.emitEvent(id,null,'revision',`Triage → ${action}: ${reason}`);
+    if(action==='repair')return this.rework(id,false,true);
+    return run;
+  }
+
+  repairPr(id:string, feedback:string):Run {
+    const run=this.requireRun(id);
+    if(!run.crate || !run.git?.prUrl || run.git.publishing || run.crate.prState!=='OPEN' || run.status!=='completed')throw Error('Only an open, idle PR can return to implementation.');
+    const index=run.steps.length-1, review=run.steps[index];
+    const candidate={...run,currentStep:index,status:'waiting_approval' as const};
+    if(reworkTarget(candidate)<0)throw Error('This workflow has no eligible implementer to repair PR findings.');
+    if(review.output.length+feedback.length>58000)throw Error('Review and PR feedback are too long for a repair. Summarize the findings first.');
+    run.currentStep=index;run.status='waiting_approval';review.status='waiting_approval';
+    review.output+=`\n\nPR feedback routed by triage:\n${feedback}`;
+    run.crate.updatingPr=true;delete run.git.approvedTree;
+    if(run.automation){run.automation.status='paused';run.automation.message='PR repair requires fresh review, triage and human approval.';}
+    this.persist(run);return this.rework(id,false,true);
   }
 
   private requireRun(id: string): Run {

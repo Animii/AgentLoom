@@ -1,4 +1,5 @@
 import { secondOpinionAvailable } from '../shared/automation';
+import { needsTriage, triagePassed } from '../shared/crates';
 import CouncilPanel from './CouncilPanel';
 import ValidationPanel from './ValidationPanel';
 import GitRunPanel from './GitRunPanel';
@@ -403,8 +404,9 @@ export default function RunDetail({ run, events, busy, onAction, onBack, onMessa
       {selectedStep && <ReviewAdvice run={run} step={selectedStep} onDraft={text => { setDraftSuggestion({stepId:selectedStep.definition.id,text,nonce:Date.now()}); setTab('output'); }} />}
       {showFooter ? (
         <footer className="approval-bar">
+          {needsTriage(run)&&!triagePassed(run)&&<p className="approval-context">Triage is required before approval. <button className="btn" onClick={()=>updateUrl({view:'crates',crateNode:'triage',crateTab:'brief'})}>Open triage</button></p>}
           {isWaitingApproval && <p className="approval-context">{run.steps[run.currentStep]?.definition.name} is ready for review. {run.steps[run.currentStep + 1] ? `Approval starts ${run.steps[run.currentStep + 1].definition.name}.` : 'Approval completes this run.'}</p>}
-          {repairTarget >= 0 && activeStep === run.currentStep && <div>
+          {repairTarget >= 0 && !run.crate && activeStep === run.currentStep && <div>
             <button type="button" className="btn primary" disabled={busy || showRevision} onClick={() => { void onAction('rework').then(() => updateUrl({ step: null, tab: null })).catch(() => {}); }}>Send to implementer</button>
             <p className="approval-context">Sends these findings to {run.steps[repairTarget].definition.name}, then repeats validation and review. Existing approval gates stay in place.</p>
           </div>}
@@ -417,7 +419,7 @@ export default function RunDetail({ run, events, busy, onAction, onBack, onMessa
               type="button"
               className="btn primary"
               onClick={() => runAction('approve')}
-              disabled={busy || showRevision || assessmentPending || Boolean(uncertaintyToken && acknowledgedAssessment !== uncertaintyToken)}
+              disabled={busy || showRevision || assessmentPending || (needsTriage(run)&&!triagePassed(run)) || run.crate?.join==='waiting' || Boolean(uncertaintyToken && acknowledgedAssessment !== uncertaintyToken)}
             >
               {currentPlanning ? 'Approve plan and continue' : 'Approve and continue'}
             </button>

@@ -7,15 +7,17 @@ import RunDetail from './RunDetail';
 import WorkflowEditor from './WorkflowEditor';
 import RunOverview from './RunOverview';
 import ProjectsView from './ProjectsView';
+import CratesView from './CratesView';
 import { useUrlState, useUrlSelection, updateUrl } from './url-state';
 
-type ViewId = 'runs' | 'projects' | 'workflows' | 'agents';
+type ViewId = 'crates' | 'runs' | 'projects' | 'workflows' | 'agents';
 type RunActionId = 'approve' | 'revise' | 'rework' | 'retry' | 'cancel';
 type ErrorKey = 'runs' | 'workflows' | 'projects' | 'providers' | 'events' | 'action';
 
 const RUN_POLL_MS = 1500;
 
 const NAV_ITEMS: ReadonlyArray<{ id: ViewId; label: string }> = [
+  { id: 'crates', label: 'Crates' },
   { id: 'runs', label: 'Runs' },
   { id: 'projects', label: 'Projects' },
   { id: 'workflows', label: 'Workflows' },
@@ -52,14 +54,15 @@ async function getJson<T>(url: string): Promise<T> {
 }
 
 export default function App() {
-  const [view, setView] = useUrlState<ViewId>('view', 'runs', ['runs', 'projects', 'workflows', 'agents']);
+  const [view, setView] = useUrlState<ViewId>('view', ['run','q','mode','scope'].some(key=>new URLSearchParams(window.location.search).has(key))?'runs':'crates', ['crates','runs', 'projects', 'workflows', 'agents']);
 
   const [runs, setRuns] = useState<Run[]>([]);
   const [runsLoading, setRunsLoading] = useState(true);
   const runsInFlightRef = useRef(false);
 
   const [selectedRunId] = useUrlSelection('run');
-  const setSelectedRunId = useCallback((id: string | null) => updateUrl({ view: null, run: id, step: null, tab: null, file: null, activity: null }), []);
+  const setSelectedRunId = useCallback((id: string | null) => updateUrl({ view: 'runs', run: id, step: null, tab: null, file: null, activity: null }), []);
+  const openCrate = useCallback((id:string)=>updateUrl({view:'crates',run:id,crateNode:null,crateTab:null,step:null,tab:null,file:null,activity:null}),[]);
   const streamingRunRef = useRef<string | null>(null);
 
   const [events, setEvents] = useState<RunEvent[]>([]);
@@ -100,7 +103,8 @@ export default function App() {
         const list = await getJson<Run[]>('/api/runs');
         setRuns(previous => list.map(run => {
           const current = previous.find(item => item.id === run.id);
-          return current && (streamingRunRef.current === run.id || current.updatedAt > run.updatedAt) ? current : run;
+          // A stalled SSE connection must not suppress a newer durable snapshot.
+          return current && current.updatedAt >= run.updatedAt ? current : run;
         }));
         setResourceError('runs', null);
       } catch (error) {
@@ -246,9 +250,9 @@ export default function App() {
 
   const handleCreated = useCallback((run: Run): void => {
     setRuns((previous) => [run, ...previous.filter((item) => item.id !== run.id)]);
-    setSelectedRunId(run.id);
+    if(view==='crates')openCrate(run.id);else setSelectedRunId(run.id);
     setDialogOpen(false);
-  }, [setSelectedRunId]);
+  }, [setSelectedRunId,openCrate,view]);
 
   const handleBack = useCallback((): void => {
     setSelectedRunId(null);
@@ -324,14 +328,15 @@ export default function App() {
         <nav className="nav" aria-label="Primary">
           {NAV_ITEMS.map(item => <button key={item.id} type="button" className={`nav-button${view === item.id ? ' active' : ''}`} aria-current={view === item.id ? 'page' : undefined} onClick={() => { if (item.id === 'runs') setSelectedRunId(null); else setView(item.id); }}>{item.label}</button>)}
         </nav>
-        <button type="button" className="button button-primary" onClick={() => openDialog(false)}><Plus size={16} aria-hidden="true" />New run</button>
+        <button type="button" className="button button-primary" onClick={() => openDialog(false)}><Plus size={16} aria-hidden="true" />{view === 'crates' ? 'New crate' : 'New run'}</button>
       </header>
 
       {activeErrors.length > 0 && <div className="alerts">{activeErrors.map(([key, message]) => <p key={key} role="alert" className="alert">{message}</p>)}</div>}
 
+      <main className="main crates-main" hidden={view !== 'crates'}>{view==='crates'&&<CratesView runs={runs} selected={selectedRun} loading={runsLoading} events={events} busy={actionBusy} onOpen={openCrate} onNew={()=>openDialog(false)} refresh={loadRuns} onAction={handleAction} onMessage={sendPlanningMessage}/>}</main>
       <main className="main" hidden={view !== 'runs'}>
         {selectedRunId && !selectedRun && <section><h1 tabIndex={-1}>{runsLoading ? 'Loading run?' : errors.runs ? 'Unable to load run' : 'Run not found'}</h1><p className="page-lede">{runsLoading ? 'Restoring your view.' : 'This link could not be opened. You can return to the run list.'}</p><button className="button" onClick={handleBack}>Back to runs</button></section>}
-        {selectedRun && <RunDetail key={selectedRun.id} run={selectedRun} events={events} busy={actionBusy} onAction={handleAction} onBack={handleBack} onMessage={sendPlanningMessage} />}
+        {view==='runs' && selectedRun && <RunDetail key={selectedRun.id} run={selectedRun} events={events} busy={actionBusy} onAction={handleAction} onBack={handleBack} onMessage={sendPlanningMessage} />}
         <div hidden={selectedRunId !== null}><RunOverview runs={runs} loading={runsLoading} onOpen={setSelectedRunId} /></div>
       </main>
 
@@ -346,7 +351,7 @@ export default function App() {
         <header className="page-head"><div><h1 className="page-title" tabIndex={-1}>Agents</h1><p className="page-lede">Manage provider connections and credentials.</p></div></header>
         <ProvidersView providers={providers} loading={providersLoading} onRefresh={() => { void loadProviders(); }} />
       </main>
-      <NewRunDialog open={dialogOpen} initialDemo={dialogInitialDemo} initialProject={dialogProject} workflows={workflows} projects={projects.filter(project => (!project.status || project.status === 'active') && project.available !== false)} onConnect={() => { setDialogOpen(false); setView('projects'); setConnectRequest(value => value + 1); }} onClose={() => setDialogOpen(false)} onCreated={handleCreated} onProjectCreated={project => { setProjects(previous => [...previous.filter(item => item.id !== project.id), project].sort((a, b) => a.name.localeCompare(b.name))); void loadProjects(); }} />
+      <NewRunDialog crate={view==='crates'} open={dialogOpen} initialDemo={dialogInitialDemo} initialProject={dialogProject} workflows={workflows} projects={projects.filter(project => (!project.status || project.status === 'active') && project.available !== false)} onConnect={() => { setDialogOpen(false); setView('projects'); setConnectRequest(value => value + 1); }} onClose={() => setDialogOpen(false)} onCreated={handleCreated} onProjectCreated={project => { setProjects(previous => [...previous.filter(item => item.id !== project.id), project].sort((a, b) => a.name.localeCompare(b.name))); void loadProjects(); }} />
     </div>
   );
 }

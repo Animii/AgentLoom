@@ -6,6 +6,7 @@ import { supportsEscalation } from '../shared/automation';
 type RunMode = 'live' | 'demo';
 
 interface NewRunDialogProps {
+  crate?: boolean;
   open: boolean;
   initialDemo: boolean;
   initialProject: string | null;
@@ -22,6 +23,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export default function NewRunDialog({
+  crate = false,
   open,
   initialDemo,
   initialProject,
@@ -77,7 +79,7 @@ export default function NewRunDialog({
       setMode(initialDemo ? 'demo' : 'live');
       setDelivery(initialDemo ? 'manual' : 'draft');
       setProject(initialProject ?? projects[0]?.id ?? '');
-      setWorkflowSelection(workflows.find(w=>w.id==='single-review-delivery')?.id ?? workflows[0]?.id ?? '');
+      setWorkflowSelection(workflows.find(w=>w.id===(crate?'crate-delivery':'single-review-delivery'))?.id ?? workflows[0]?.id ?? '');
       setSubmitting(false);
       setRescue(true);
       setError(null);
@@ -87,7 +89,7 @@ export default function NewRunDialog({
   }, [open, initialDemo, initialProject, projects, workflows]);
 
   useEffect(() => { if (open && !project && projects.length) setProject(initialProject ?? projects[0].id); }, [open, project, projects, initialProject]);
-  useEffect(() => { if (open && !workflowSelection && workflows.length) setWorkflowSelection(workflows.find(w=>w.id==='single-review-delivery')?.id ?? workflows[0].id); }, [open, workflowSelection, workflows]);
+  useEffect(() => { if (open && !workflowSelection && workflows.length) setWorkflowSelection(workflows.find(w=>w.id===(crate?'crate-delivery':'single-review-delivery'))?.id ?? workflows[0].id); }, [open, workflowSelection, workflows]);
 
   const canSubmit =
     !submitting &&
@@ -115,6 +117,7 @@ export default function NewRunDialog({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          ...(crate ? {crate:true} : {}),
           title: title.trim(),
           task: task.trim(),
           project,
@@ -159,7 +162,7 @@ export default function NewRunDialog({
     >
       {addingProject ? <ProjectImport titleId={dialogTitleId} onBusy={setImportBusy} onCancel={() => setAddingProject(false)} onCreated={item => { onProjectCreated(item); setProject(item.id); setAddingProject(false); }} /> : <form className="new-run-form" onSubmit={handleSubmit}>
         <h2 id={dialogTitleId} className="dialog-title">
-          New run
+          {crate ? 'New crate' : 'New run'}
         </h2>
 
         {error ? (
@@ -261,7 +264,7 @@ export default function NewRunDialog({
             Cancel
           </button>
           <button type="submit" className="btn primary" disabled={!canSubmit} aria-busy={submitting}>
-            {'Start run'}
+            {crate ? 'Create crate' : 'Start run'}
           </button>
         </div>
 

@@ -29,7 +29,7 @@ export default function PlanningChat({ run, step, current, busy, events, onSend,
   const request = useRef<{ id: string; content: string } | null>(null);
   const [chatInstead, setChatInstead] = useState<string | null>(null);
   const working = current && ['queued', 'running'].includes(run.status);
-  const published = Boolean(run.git?.publishing || run.git?.prUrl);
+  const published = Boolean(run.git?.publishing || (run.git?.prUrl && !run.crate?.updatingPr) || run.crate?.join==='waiting');
   const canSend = !published && step.status !== 'pending' && !busy && ['waiting_input', 'waiting_approval', 'blocked', 'completed'].includes(run.status);
   const messages = step.conversation ?? [
     { id: 'task', role: 'user' as const, content: run.task, createdAt: run.createdAt },

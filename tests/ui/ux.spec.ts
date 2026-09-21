@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
 test('quiet run list, search, mobile navigation and review without overlapping controls', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto('/');
+  await page.goto('/?view=runs');
   await expect(page.getByRole('button', { name: 'New run', exact: true })).toHaveCount(1);
   await expect(page.getByRole('heading', { name: 'Runs', exact: true })).toBeVisible();
   await expect(page.getByRole('group', { name: 'UI design' })).toHaveCount(0);
@@ -53,7 +53,7 @@ test('quiet run list, search, mobile navigation and review without overlapping c
 });
 
 test('progressive settings and workflow drafts survive navigation', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?view=runs');
   await page.getByRole('button', { name: 'Workflows', exact: true }).click();
   await expect(page.locator('.wf-step[open]')).toHaveCount(0);
   await page.getByLabel('Description', { exact: true }).fill('Unsaved workflow draft');

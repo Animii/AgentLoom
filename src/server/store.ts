@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { ManagedProject, Run, RunEvent, Workflow } from '../shared/types.js';
-import { initialWorkflows, evidenceWorkflow, councilWorkflow, singleReviewWorkflow } from './templates.js';
+import { initialWorkflows, evidenceWorkflow, councilWorkflow, singleReviewWorkflow, crateWorkflow } from './templates.js';
 
 const MAX_EVENT_MESSAGE_LENGTH = 100000;
 const MAX_EVENTS_PER_QUERY = 2000;
@@ -69,6 +69,7 @@ export class Store {
   private seedTemplates(): void {
     const row = this.db.prepare('SELECT COUNT(*) AS count FROM workflows').get() as unknown as CountRow;
     if (Number(row.count) > 0) {
+      if (!this.getWorkflow(crateWorkflow.id)) this.saveWorkflow(crateWorkflow);
       if (!this.getWorkflow(singleReviewWorkflow.id)) this.saveWorkflow(singleReviewWorkflow);
       if (!this.getWorkflow(councilWorkflow.id)) this.saveWorkflow(councilWorkflow);
       if (!this.getWorkflow(evidenceWorkflow.id)) this.saveWorkflow(evidenceWorkflow);
@@ -132,6 +133,16 @@ export class Store {
       )
       .run(stored.id, JSON.stringify(stored), stored.createdAt);
     for (const listener of this.listeners.get(run.id) ?? []) listener();
+  }
+
+  saveRuns(runs: Run[]): void {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const statement=this.db.prepare('INSERT INTO runs (id,data,created_at) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data');
+      for(const run of runs)statement.run(run.id,JSON.stringify({...run,updatedAt:new Date().toISOString()}),run.createdAt);
+      this.db.exec('COMMIT');
+    } catch(error) { this.db.exec('ROLLBACK'); throw error; }
+    for(const run of runs)for(const listener of this.listeners.get(run.id)??[])listener();
   }
 
   addEvent(runId: string, stepId: string | null, type: RunEvent['type'], message: string): RunEvent {

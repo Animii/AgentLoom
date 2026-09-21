@@ -25,7 +25,7 @@ test('overview prioritizes attention, shows honest progress, filters and updates
   // Only the run feed is simulated, so every state can be inspected without invoking agents.
   await page.route(/\/api\/runs$/, route => route.fulfill({ json: data }));
   await page.route(/\/api\/runs\/[^/]+\/events\?/, route => route.fulfill({ json: [] }));
-  await page.goto('/');
+  await page.goto('/?view=runs');
   const attention = page.getByRole('region', { name: 'Needs attention', exact: true });
   const active = page.getByRole('region', { name: 'In progress', exact: true });
   const history = page.getByRole('region', { name: 'Finished', exact: true });

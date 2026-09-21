@@ -5,6 +5,7 @@ const seededAt = new Date().toISOString();
 export const initialWorkflows: Workflow[] = [
   {
     id: 'review-build',
+    allowSplit:true,
     name: 'Review, Build and Verify',
     description:
       'Full delivery path: plan the change, design the solution, implement it, then review the result. Approval, where enabled, means the run pauses AFTER the step produces its output and BEFORE the next step starts so the user (the final approver) can accept, request a revision or stop. Every step must stop with BLOCKED if its approved requirements are missing.',
@@ -141,6 +142,9 @@ export const evidenceWorkflow: Workflow = {
  ]
 };
 initialWorkflows.push(evidenceWorkflow);
+
+export const crateWorkflow:Workflow={...structuredClone(evidenceWorkflow),id:'crate-delivery',name:'Crate delivery',allowSplit:true,description:'Plan a crate, optionally split approved scopes into child worktrees, integrate, validate and review. Explicit triage routes findings before human approval. PR feedback returns to the same crate.'};
+initialWorkflows.push(crateWorkflow);
 
 export const councilWorkflow: Workflow = {
   ...structuredClone(evidenceWorkflow), id:'council-delivery', name:'Approved Task with Outcome Council',

@@ -191,3 +191,37 @@ The frozen pilot keeps its original failures. The interrupted attempt omitted
 by its old runtime is retained as a supplemental operator-snapshot record rather
 than silently rewriting the live run. Flash, Fable and unknown costs are reported
 separately in the versioned evidence.
+
+## Crates workspace — 2026-09-21
+
+Implemented persistent crate identity on existing runs, a workflow map and inspector,
+workflow-controlled child worktrees, guarded Git integration, explicit outcome
+triage, and polling of GitHub reviews/checks. PR repairs retain the same branch,
+PR, evidence and attempt history; fresh review and approval remain required.
+See [CRATES.md](CRATES.md) for the supported lifecycle and current boundaries.
+
+Validation:
+- TypeScript typecheck and production build passed.
+- Final backend suite: **155/155 passed** in a Linux container built from the
+  production runtime with development test dependencies. Real Git tests include
+  two-child integration, conflicting joins leaving the parent unchanged, and
+  updating an existing PR without creating a second PR.
+- **28 distinct Playwright scenarios passed across the full run and targeted
+  reruns**, including two new crates scenarios. The initial full pass was 22/28.
+  Follow-up fixed legacy filtered bookmarks and streaming polling recovery;
+  existing run tests now explicitly select the Runs view. The isolated fixture's
+  sample README and recovery workspace path were also corrected. One older gated
+  demo scenario had a transient stale-running timeout and passed unchanged alone.
+- Jev browser fixture passed key persistence, evaluations and mobile checks.
+- Read-only GitHub CLI smoke read existing PR #14 successfully. Provider execution
+  and GitHub writes in automated tests used fixtures; no new live model evaluation
+  or external PR was created for this validation.
+- Docker Compose test stack and main application passed health checks. Deployed
+  desktop/mobile smoke opened an existing run in Crates and restored its URL.
+- All **190 existing runs** retained their IDs, status, current step, automation
+  state and PR links across deployment. No active runs were interrupted.
+
+The initial Windows full suite had 131/150 passes and multiple short subprocess
+startup/validation deadlines expired under concurrent load. The deployed Linux
+suite above is the final backend result; these earlier failures are retained in
+local artifacts rather than reported as passes.

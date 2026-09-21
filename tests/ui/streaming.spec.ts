@@ -13,7 +13,7 @@ test('live stream shows partial reply and ask choices survive reload with editab
  }});
  try{
   const address=await app.listen({port:0,host:'127.0.0.1'});const run=await app.engine.create({title:'Streaming question test',task:'Plan a dashboard',project:'welcome',workflowId:'review-build',mode:'live'});
-  await page.goto(address);await page.getByRole('button').filter({hasText:'Streaming question test'}).first().click();
+  await page.goto(address+'/?view=runs');await page.getByRole('button').filter({hasText:'Streaming question test'}).first().click();
   await expect(page.locator('.chat-partial')).toContainText('Let me understand your goal');await expect(page.locator('.detail-status .status-running')).toBeVisible();
   await expect(page.locator('.chat-tool-call').filter({hasText:'Read project file'})).toContainText('Running');
   await expect(page.getByRole('button',{name:/Developers/})).toBeEnabled();
@@ -82,7 +82,7 @@ test('chat keeps a stable reply, follows streaming only at the bottom and allows
  try {
   const address=await app.listen({port:0,host:'127.0.0.1'});
   await app.engine.create({title:'Smooth conversation',task:'Create a clear implementation plan.',project:'welcome',workflowId:'review-build',mode:'live'});
-  await page.goto(address);await page.getByRole('button').filter({hasText:'Smooth conversation'}).first().click();
+  await page.goto(address+'/?view=runs');await page.getByRole('button').filter({hasText:'Smooth conversation'}).first().click();
   await expect(page.locator('.chat-thinking')).toBeVisible();
   const reply=await page.locator('.chat-partial').elementHandle();
   const input=page.getByLabel('Message the planner');await input.fill('Keep the scope small.');await input.press('Shift+Enter');await input.press('a');

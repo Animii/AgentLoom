@@ -1,4 +1,6 @@
 import {assessValidation} from './validation.js';
+import { registerCrates } from './crates.js';
+import { readCratePr } from './git-workspaces.js';
 import {Automation} from './automation.js';
 import { previewRunGit, publishDraftPr } from './git-workspaces.js';
 import { canAssessReview } from '../shared/review-assessment.js';
@@ -29,6 +31,7 @@ declare module 'fastify' {
 }
 
 export interface CreateAppOptions {
+  readPr?: typeof readCratePr;
   execute?: ExecuteAgent;
   serveStatic?: boolean;
   jevFetch?: typeof fetch;
@@ -116,6 +119,7 @@ const stepDefinitionSchema = z
 
 const workflowSchema = z
   .strictObject({
+    allowSplit:z.boolean().optional(),
     id: idField,
     name: nameField,
     description: z.string().max(2000, 'must be at most 2000 characters'),
@@ -146,6 +150,7 @@ const workflowSchema = z
   });
 
 const runInputSchema = z.strictObject({
+  crate: z.boolean().optional(),
   title: z
     .string()
     .min(1, 'must not be empty')
@@ -291,6 +296,7 @@ export async function createApp(config: AppConfig, options: CreateAppOptions = {
   let evaluateJev: ReturnType<typeof registerJev> | undefined;
   let assessor: ReturnType<typeof createReviewAssessor> | undefined;
   let automation:Automation|undefined;
+  let closeCrates:(()=>Promise<void>)|undefined;
   const engine = new Engine(store, config, options.execute ?? createExecutor(config), projects, (id,stepId) => assessor?.assess(id,stepId), (run,evidence)=>assessValidation(run,evidence,evaluateJev));
   app.decorate('store', store);
   app.decorate('engine', engine);
@@ -303,6 +309,7 @@ export async function createApp(config: AppConfig, options: CreateAppOptions = {
     options.discoverModels ?? ((provider, refresh) => modelCatalogs!.get(provider, refresh));
 
   app.addHook('onClose', async () => {
+    await closeCrates?.();
     modelCatalogs?.close();
     await automation?.close();
     await engine.shutdown();
@@ -351,17 +358,25 @@ export async function createApp(config: AppConfig, options: CreateAppOptions = {
   evaluateJev = registerJev(app, config, options.jevFetch ?? fetch);
   async function publish(id:string,input?:{token:string;title:string;body:string}){
     const run=store.getRun(id);if(!run?.git || run.status!=='completed'||run.mode!=='live')throw Error('Complete and approve the worktree run first.');
-    if(run.git.prUrl)return {url:run.git.prUrl,commit:run.git.publishedCommit};
+    if(run.crate?.parentId)throw Error('Child crates are delivered through the parent PR.');
+    if(run.git.prUrl&&!run.crate?.updatingPr)return {url:run.git.prUrl,commit:run.git.publishedCommit};
     if(publishing.has(id))throw Error('PR creation is already in progress.');
     run.git.publishing=true;store.saveRun(run);
     const job=(async()=>{await engine.assertValidationCurrent(id);const preview=await previewRunGit(run,config);if(!run.git?.approvedTree||preview.tree!==run.git.approvedTree)throw Error('Files changed after approval. Revalidate and approve the current files.');return (options.publishPr??publishDraftPr)(run,config,input??{token:preview.token,title:preview.title,body:preview.body});})();
     publishing.set(id,job);
-    try{const result=await job;const latest=store.getRun(id)!;latest.git={...latest.git!,prUrl:result.url,publishedCommit:result.commit,publishing:false};store.saveRun(latest);store.addEvent(id,null,'log',`Draft PR created: ${result.url}`);return result;}
+    try{const result=await job;const latest=store.getRun(id)!;latest.git={...latest.git!,prUrl:result.url,publishedCommit:result.commit,publishing:false};if(latest.crate){latest.crate.updatingPr=false;latest.crate.prState='OPEN';}store.saveRun(latest);store.addEvent(id,null,'log',`Draft PR published: ${result.url}`);return result;}
     finally{publishing.delete(id);const latest=store.getRun(id);if(latest?.git?.publishing){latest.git.publishing=false;store.saveRun(latest);}}
   }
   automation=new Automation(store,engine,evaluateJev,id=>publish(id));
+  closeCrates=registerCrates(app,config,options.readPr);
   app.addHook('preHandler',async(request,reply)=>{
-    const match=/^\/api\/runs\/([^/]+)\/(messages|revise|rework|retry|cancel|approve|second-opinion)$/.exec(request.url.split('?')[0]);
+    if(request.method!=='POST')return;
+    const match=/^\/api\/runs\/([^/]+)\//.exec(request.url);if(!match)return;
+    const run=store.getRun(match[1]);const parent=run?.crate?.parentId?store.getRun(run.crate.parentId):undefined;
+    if(run?.crate?.joining || parent?.crate?.joining || parent?.crate?.join==='joined')return sendError(reply,409,'Integration owns these child results. Continue work in the parent crate.');
+  });
+  app.addHook('preHandler',async(request,reply)=>{
+    const match=/^\/api\/runs\/([^/]+)\/(messages|revise|rework|retry|cancel|approve|second-opinion|crate-triage|crate-split|crate-join|crate-enable)$/.exec(request.url.split('?')[0]);
     if(request.method!=='POST'||!match)return;
     const run=store.getRun(match[1]);
     if(!run?.automation?.approvedAt)return;
@@ -412,6 +427,7 @@ export async function createApp(config: AppConfig, options: CreateAppOptions = {
       return sendError(reply, 400, 'Workflow id in path does not match body id');
     }
     const workflow: Workflow = {
+      allowSplit:parsed.data.allowSplit,
       id: parsed.data.id,
       name: parsed.data.name,
       description: parsed.data.description,
@@ -505,7 +521,7 @@ export async function createApp(config: AppConfig, options: CreateAppOptions = {
     const body=z.strictObject({token:z.string().regex(/^[a-f0-9]{64}$/),title:z.string().trim().min(1).max(200),body:z.string().max(30000)}).safeParse(request.body);
     if(!body.success)return sendError(reply,400,'A current diff preview, title and body are required.');
     const run=store.getRun(request.params.id);if(!run)return sendError(reply,404,'Run not found');
-    if(run.git?.prUrl)return {url:run.git.prUrl};
+    if(run.git?.prUrl&&!run.crate?.updatingPr)return {url:run.git.prUrl};
     if(run.mode!=='live'||run.status!=='completed'||!run.git)return sendError(reply,409,'Complete and approve the worktree run first.');
     if(publishing.has(run.id))return sendError(reply,409,'PR creation is already in progress.');
     try{

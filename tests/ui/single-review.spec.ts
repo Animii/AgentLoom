@@ -21,7 +21,7 @@ test('default single review streams openly, second opinion preserves history and
  }});
  const workflow=structuredClone(singleReviewWorkflow);workflow.steps[2].validation.commands=[{executable:process.execPath,args:['-e',"if(require('fs').readFileSync('app.txt','utf8')!=='fixed')process.exit(1)"],timeoutMs:3000}];app.store.saveWorkflow(workflow);
  try{
-  const address=await app.listen({port:0,host:'127.0.0.1'});await page.route('**/api/workflows',async route=>{await workflowGate;await route.continue();});await page.goto(address);
+  const address=await app.listen({port:0,host:'127.0.0.1'});await page.route('**/api/workflows',async route=>{await workflowGate;await route.continue();});await page.goto(address+'/?view=runs');
   await page.getByRole('button',{name:'New run',exact:true}).first().click();await page.getByLabel('Task title',{exact:true}).fill('Draft while workflows load');await expect(page.getByLabel('Workflow',{exact:true})).toHaveValue('');releaseWorkflows();await expect(page.getByLabel('Workflow',{exact:true})).toHaveValue('single-review-delivery');await expect(page.getByLabel('Task title',{exact:true})).toHaveValue('Draft while workflows load');await expect(page.getByRole('dialog')).toContainText('Automatic draft PRs require a Git worktree');await page.getByRole('button',{name:'Cancel',exact:true}).click();
   const run=await app.engine.create({title:'Single review UI',task:'AC1: value is fixed.',project:'sample',workflowId:workflow.id,mode:'live'});
   await page.goto(`${address}/?run=${run.id}`);await page.getByRole('button',{name:'Approve plan and continue',exact:true}).click();

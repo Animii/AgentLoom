@@ -4,7 +4,7 @@ test('planning chat survives reload, keeps corrections and gates the handoff',as
  const title=`E2E planning ${Date.now()}`;
  const created=await request.post('/api/runs',{data:{title,task:'Plan an accessible local dashboard.',project:'welcome',workflowId:'review-build',mode:'demo'}});
  expect(created.status()).toBe(201);const run=await created.json();
- await page.goto('/');await page.getByRole('button').filter({hasText:title}).first().click();
+ await page.goto('/?view=runs');await page.getByRole('button').filter({hasText:title}).first().click();
  await expect(page.getByRole('region',{name:'Planning conversation'})).toContainText('Who is this for?');
  await expect(page.getByRole('button',{name:'Approve plan and continue'})).toHaveCount(0);
  expect((await request.post(`/api/runs/${run.id}/approve`)).status()).toBe(409);
