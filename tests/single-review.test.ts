@@ -11,9 +11,9 @@ import type {Run} from '../src/shared/types.js';
 async function fixture(){
  const root=await mkdtemp(path.join(tmpdir(),'loom-single-'));
  await mkdir(path.join(root,'work/projects/sample'),{recursive:true});await writeFile(path.join(root,'work/projects/sample/app.txt'),'fixed');
- let mode='pass';const calls:string[]=[];
+ let mode='pass';const calls:string[]=[];const prompts:string[]=[];
  const app=await createApp({dataDir:path.join(root,'data'),workspaceRoot:path.join(root,'work'),host:'127.0.0.1',port:0,cliTimeoutMs:1000,maxOutputBytes:100000},{serveStatic:false,execute:async(step,prompt)=>{
-  calls.push(step.id);
+  calls.push(step.id);prompts.push(prompt);
   if(step.id==='plan')return {output:'AC1: app.txt is fixed. AC2: only app.txt is in scope.\nPLAN_READY',sessionId:null,costUsd:null};
   if(step.id==='build')return {output:'Ready for verification.',sessionId:null,costUsd:null};
   if(step.id==='council-chair')return {output:JSON.stringify({summary:'Reports compared; original findings still require resolution.',disputes:[]}),sessionId:null,costUsd:null};
@@ -27,7 +27,7 @@ async function fixture(){
  const saved=await app.inject({method:'PUT',url:`/api/workflows/${workflow.id}`,payload:workflow});assert.equal(saved.statusCode,200,saved.body);
  const wait=async(id:string,predicate:(r:Run)=>boolean)=>{for(let n=0;n<600;n++){const r=app.store.getRun(id)!;if(predicate(r))return r;await delay(20);}throw Error('Timed out: '+JSON.stringify(app.store.getRun(id)));};
  const start=async()=>{const run=await app.engine.create({title:'Single review',task:'AC1: value fixed. AC2: scope app.txt.',project:'sample',workflowId:workflow.id,mode:'live'});await wait(run.id,r=>r.status==='waiting_approval');await app.engine.approveCurrent(run.id);return wait(run.id,r=>r.currentStep===3&&['blocked','waiting_approval'].includes(r.status));};
- return {app,calls,start,wait,mode:(value:string)=>{mode=value;},close:async()=>{await app.close();await rm(root,{recursive:true,force:true,maxRetries:10});}};
+ return {app,calls,prompts,start,wait,mode:(value:string)=>{mode=value;},close:async()=>{await app.close();await rm(root,{recursive:true,force:true,maxRetries:10});}};
 }
 
 test('single structured review runs once, skips synthesis and guards source freshness',async()=>{
@@ -59,5 +59,14 @@ test('a failed single reviewer is recoverable without bypassing review or runnin
  const f=await fixture();try{f.mode('fail');let run=await f.start();assert.equal(run.status,'blocked');await assert.rejects(f.app.engine.secondOpinion(run.id,'Replace it'),/Recover/);
   // A focused evidence request re-executes the failed review against the same source.
   f.mode('pass');f.app.engine.chat(run.id,'review','Retry the unavailable reviewer.','retry-1');run=await f.wait(run.id,r=>r.currentStep===3&&r.status==='waiting_approval');assert.equal(run.steps[3].council!.challenge!.reviewers.length,1);assert.equal(f.calls.includes('council-chair'),false);
+ }finally{await f.close();}
+});
+
+test('operator evidence clarification survives implementation repair without clearing the blocker',async()=>{
+ const f=await fixture();try{f.mode('block');let run=await f.start();const question='Recorded central Compose validation passed on the unchanged application baseline; retain F1 until verified fixed.';
+  f.app.engine.chat(run.id,'review',question,'receipt-1');const clarifiedAttempt=(await f.wait(run.id,r=>r.status==='blocked')).steps[3].attempt;
+  f.app.engine.rework(run.id);run=await f.wait(run.id,r=>r.currentStep===3&&r.status==='blocked');
+  assert.ok(f.prompts.at(-1)!.includes(question));assert.deepEqual(run.steps[3].council!.reviewClarifications,[{attempt:clarifiedAttempt,question}]);
+  assert.equal(run.steps[3].council!.reviewers[0].report!.findings[0].id,'F1');await assert.rejects(f.app.engine.approveCurrent(run.id));
  }finally{await f.close();}
 });

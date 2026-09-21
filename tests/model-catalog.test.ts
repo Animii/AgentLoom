@@ -40,8 +40,9 @@ function handle(line) {
     if (mode === 'no-handshake') { process.exit(1); return; }
     if (mode === 'close-stdin') {
       write({ jsonrpc: '2.0', id: message.id, result: { userAgent: 'fixture' } });
-      process.stdin.pause();
-      require('node:fs').closeSync(0);
+      // Close through the stream that owns fd 0. Raw closeSync races libuv's
+      // pipe watcher on Linux and can hang this fixture instead of exiting.
+      process.stdin.destroy();
       setTimeout(() => process.exit(0), 50);
       return;
     }

@@ -12,7 +12,7 @@
     "build": "tsc -p tsconfig.server.json && vite build",
     "start": "node dist/server/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test --test-concurrency=1 tests/*.test.ts",
+    "test": "tsx --test tests/*.test.ts",
     "test:ui": "playwright test",
     "test:jev-ui": "npm run build && node scripts/test-jev-ui.mjs"
   },

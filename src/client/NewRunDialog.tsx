@@ -250,6 +250,7 @@ export default function NewRunDialog({
         </div>
 
         {automationEligible&&<div className="field"><label htmlFor={`${fieldId}-delivery`}>Delivery</label><select id={`${fieldId}-delivery`} value={delivery} onChange={e=>setDelivery(e.target.value)} disabled={submitting}><option value="manual">Manual approval gates</option><option value="draft">PR machine · automatic draft PR</option></select><p className="field-helper">Approve the plan first. Jev can request up to two repairs; passing tests and independent review are required. Uncertainty pauses the run. Nothing merges automatically.</p></div>}
+        {mode==='live' && selectedWorkflow?.steps.at(-1)?.council && projects.find(p=>p.id===project)?.workspaceMode!=='worktree' && <p className="field-helper">Automatic draft PRs require a Git worktree project with a GitHub origin. Change the project's access mode under Projects. This run will use manual approval gates.</p>}
         <div className="dialog-actions">
           <button type="button" className="btn ghost" onClick={onClose} disabled={submitting}>
             Cancel

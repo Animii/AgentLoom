@@ -7,10 +7,12 @@ services:
     init: true
     command: [node, /pilot/pr-machine-server.mjs]
     security_opt: [seccomp:unconfined, apparmor:unconfined]
+    group_add: ["0"]
     environment:
       AGENTLOOM_LIVE_PILOT: five-tasks
     ports: ["127.0.0.1:4319:4317"]
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
       - .:/pilot:ro
       - pilot_data:/data
       - pilot_work:/workspaces

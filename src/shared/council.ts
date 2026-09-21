@@ -16,6 +16,7 @@ export interface CouncilReview {
 }
 export interface CouncilChair { output?: string; toolCalls?: PlanningToolCall[]; startedAt?: string; status: 'running' | 'completed' | 'failed'; summary?: string; disputes?: string[]; error?: string; costUsd: number | null }
 export interface CouncilEvidence {
+  reviewClarifications?: {attempt:number;question:string}[];
   secondOpinion?: { member: CouncilMember; question: string };
   resumeRequested?: boolean;
   obligations?: {memberId:string;findings:CouncilFinding[]}[];
