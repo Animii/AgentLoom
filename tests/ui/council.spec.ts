@@ -27,7 +27,7 @@ test('council shows independent findings, focused challenge, reload and human ap
     await expect(page.getByRole('button', { name: 'Approve and continue', exact: true })).toHaveCount(0);
     await page.reload(); await expect(council).toContainText('Reported value mismatch');
     await council.getByRole('button', { name: 'Request evidence', exact: true }).click(); await council.getByLabel('Focused question').fill('Please reproduce F1 against app.txt.'); await council.getByRole('button', { name: 'Ask council', exact: true }).click();
-    await expect(council).toContainText('Ready for your approval'); await expect(council.getByRole('button', { name: 'Request evidence', exact: true })).toHaveCount(0);
+    await expect(council).toContainText('Review passed'); await expect(council.getByRole('button', { name: 'Request evidence', exact: true })).toHaveCount(0);
     await page.reload(); await expect(council).toContainText('Focused challenge used');
     await page.setViewportSize({ width: 390, height: 844 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: 'artifacts/council-mobile.png', fullPage: true });

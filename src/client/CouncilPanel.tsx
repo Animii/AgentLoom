@@ -20,7 +20,7 @@ export default function CouncilPanel({ evidence, onChallenge, onSecondOpinion, b
   }
   const single=evidence.reviewers.length===1;
   const heading=single?'Independent review':evidence.secondOpinion?'Review and second opinion':'Outcome council';
-  const title = { running: 'Reviewing independently', pass: 'Ready for your approval', blocked: 'Changes required', needs_evidence: 'More evidence needed', stale: 'Review is out of date', simulated: 'Simulated council' }[evidence.status];
+  const title = { running: 'Reviewing independently', pass: 'Review passed', blocked: 'Changes required', needs_evidence: 'More evidence needed', stale: 'Review is out of date', simulated: 'Simulated council' }[evidence.status];
   return <section className="council-panel" aria-label={heading}>
     <div className="council-heading"><h3>{heading}</h3><strong role="status">{title}</strong></div>
     <p>{chair?.summary ?? (single ? 'One independent review against the approved task and recorded tests.' : 'Independent reviews of the same source and evidence, followed by synthesis.')}</p>

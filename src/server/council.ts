@@ -57,7 +57,7 @@ export function aggregateCouncil(evidence: CouncilEvidence): void {
 
 export function councilSummary(evidence: CouncilEvidence): string {
   const chair = evidence.challenge && !evidence.challenge.requested ? evidence.challenge.chair : evidence.chair;
-  const label = evidence.status === 'pass' ? 'Ready for your approval' : evidence.status === 'running' ? 'Reviewing' : evidence.status === 'simulated' ? 'Simulated' : 'BLOCKED';
+  const label = evidence.status === 'pass' ? 'Review passed' : evidence.status === 'running' ? 'Reviewing' : evidence.status === 'simulated' ? 'Simulated' : 'BLOCKED';
   const findings = councilReviews(evidence).flatMap(r => r.report?.findings.map(f => `- ${r.member.name} / ${f.id} (${f.severity}, ${f.criterion}): ${f.summary}\n  Evidence: ${f.evidence.join('; ')}`) ?? []);
   const shown=new Set(councilReviews(evidence).flatMap(r=>r.report?.findings.filter(f=>f.severity==='blocker').map(f=>`${r.member.id}:${f.id}`)??[]));
   findings.push(...unresolvedCouncilFindings(evidence).flatMap(o=>o.findings.filter(f=>!shown.has(`${o.memberId}:${f.id}`)).map(f=>`- Retained ${o.memberId} / ${f.id} (blocker, ${f.criterion}): ${f.summary}\n  Evidence: ${f.evidence.join('; ')}`)));
