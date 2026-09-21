@@ -95,7 +95,10 @@ export default function WorkflowEditor({
 
   const expandedProviders = draft === null
     ? []
-    : Array.from(new Set(draft.steps.filter((step) => expandedSteps[step.id]).map((step) => step.provider)));
+    : Array.from(new Set(draft.steps.filter((step) => expandedSteps[step.id]).flatMap((step) => [
+        step.provider,
+        ...(step.council?.reviewers.map((member) => member.provider) ?? []),
+      ])));
   const expandedProviderKey = expandedProviders.join(',');
 
   useEffect(() => {
@@ -143,6 +146,13 @@ export default function WorkflowEditor({
     const unnamed = draft.steps.findIndex((step) => !step.name.trim());
     if (unnamed !== -1) {
       setMessage({ kind: 'error', text: `Step ${unnamed + 1} needs a name.` });
+      return;
+    }
+    const missingReviewerModel = draft.steps.findIndex((step) =>
+      step.council?.reviewers.some((member) => member.model.trim().length === 0),
+    );
+    if (missingReviewerModel !== -1) {
+      setMessage({ kind: 'error', text: `Step ${missingReviewerModel + 1} needs an explicit model for every council reviewer.` });
       return;
     }
     setSaving(true);
@@ -272,7 +282,7 @@ export default function WorkflowEditor({
                     value={step.model}
                     catalog={catalogs[step.provider]?.catalog}
                     loading={catalogs[step.provider]?.loading ?? false}
-                    stepIndex={index}
+                    fieldKey={step.id}
                     onChange={(model) => patchStep(step.id, { model })}
                     onRefresh={() => { void loadCatalog(step.provider, true); }}
                   />
@@ -288,7 +298,7 @@ export default function WorkflowEditor({
                 </label>
 
                 </>}
-                {step.council && <div className="council-editor"><p>The provider and model above configure the chair. Members review independently; the implementer model cannot review its own work. Changes affect new runs.</p>{step.council.reviewers.map((member, mi) => <fieldset key={member.id}><legend>{member.name}</legend><label>Reviewer provider<select value={member.provider} onChange={event => patchStep(step.id,{council:{reviewers:step.council!.reviewers.map((m,i)=>i===mi?{...m,provider:event.target.value as ProviderId,model:'',effort:''}:m)}})}>{PROVIDERS.map(provider=><option key={provider}>{provider}</option>)}</select></label><label>Reviewer model<input required value={member.model} onChange={event=>patchStep(step.id,{council:{reviewers:step.council!.reviewers.map((m,i)=>i===mi?{...m,model:event.target.value}:m)}})}/></label><label>Reviewer effort<select value={member.effort} onChange={event=>patchStep(step.id,{council:{reviewers:step.council!.reviewers.map((m,i)=>i===mi?{...m,effort:event.target.value}:m)}})}>{EFFORTS[member.provider].map(effort=><option key={effort} value={effort}>{effort||'default'}</option>)}</select></label><label>Review focus<textarea value={member.focus} maxLength={2000} required onChange={event=>patchStep(step.id,{council:{reviewers:step.council!.reviewers.map((m,i)=>i===mi?{...m,focus:event.target.value}:m)}})}/></label></fieldset>)}</div>}
+                {step.council && <div className="council-editor"><p>The provider and model above configure the chair. Members review independently; the implementer model cannot review its own work. Changes affect new runs.</p>{step.council.reviewers.map((member, mi) => <fieldset key={member.id}><legend>{member.name}</legend><label>Reviewer provider<select value={member.provider} onChange={event => patchStep(step.id,{council:{reviewers:step.council!.reviewers.map((m,i)=>i===mi?{...m,provider:event.target.value as ProviderId,model:'',effort:''}:m)}})}>{PROVIDERS.map(provider=><option key={provider}>{provider}</option>)}</select></label><label>Reviewer model<ModelPicker provider={member.provider} value={member.model} catalog={catalogs[member.provider]?.catalog} loading={catalogs[member.provider]?.loading ?? false} fieldKey={`${step.id}-reviewer-${member.id}`} label="Reviewer model" allowDefault={false} onChange={model=>patchStep(step.id,{council:{reviewers:step.council!.reviewers.map((m,i)=>i===mi?{...m,model}:m)}})} onRefresh={()=>{void loadCatalog(member.provider,true);}}/></label><label>Reviewer effort<select value={member.effort} onChange={event=>patchStep(step.id,{council:{reviewers:step.council!.reviewers.map((m,i)=>i===mi?{...m,effort:event.target.value}:m)}})}>{EFFORTS[member.provider].map(effort=><option key={effort} value={effort}>{effort||'default'}</option>)}</select></label><label>Review focus<textarea value={member.focus} maxLength={2000} required onChange={event=>patchStep(step.id,{council:{reviewers:step.council!.reviewers.map((m,i)=>i===mi?{...m,focus:event.target.value}:m)}})}/></label></fieldset>)}</div>}
                 {step.validation && <div className="validation-command-editor"><p>These exact commands are approved with the plan. Arguments are separate values, one per line. Shell operators are not interpreted.</p>{step.validation.commands.map((command,ci)=><fieldset key={ci}><legend>Command {ci+1}</legend><label>Program<input value={command.executable} required onChange={e=>patchStep(step.id,{validation:{commands:step.validation!.commands.map((c,i)=>i===ci?{...c,executable:e.target.value}:c)}})}/></label><label>Arguments (one per line)<textarea rows={2} value={command.args.join("\n")} onChange={e=>patchStep(step.id,{validation:{commands:step.validation!.commands.map((c,i)=>i===ci?{...c,args:e.target.value===""?[]:e.target.value.split("\n")}:c)}})}/></label><label>Timeout (seconds)<input type="number" min={1} max={3600} value={command.timeoutMs/1000} onChange={e=>patchStep(step.id,{validation:{commands:step.validation!.commands.map((c,i)=>i===ci?{...c,timeoutMs:Number(e.target.value)*1000}:c)}})}/></label><button type="button" className="button" disabled={step.validation!.commands.length===1} onClick={()=>patchStep(step.id,{validation:{commands:step.validation!.commands.filter((_,i)=>i!==ci)}})}>Remove command {ci+1}</button></fieldset>)}<button type="button" className="button" disabled={step.validation.commands.length>=8} onClick={()=>patchStep(step.id,{validation:{commands:[...step.validation!.commands,{executable:"npm",args:["test"],timeoutMs:600000}]}})}>Add validation command</button></div>}
                 <label className="form-field">
                   Instructions

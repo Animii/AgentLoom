@@ -20,14 +20,28 @@ interface ModelPickerProps {
   value: string;
   catalog?: ModelCatalog;
   loading: boolean;
-  stepIndex: number;
+  fieldKey: string;
+  label?: string;
+  allowDefault?: boolean;
   onChange: (value: string) => void;
   onRefresh: () => void;
 }
 
-export default function ModelPicker({ provider, value, catalog, loading, stepIndex, onChange, onRefresh }: ModelPickerProps) {
-  const baseId = `model-picker-${stepIndex}`;
+export default function ModelPicker({
+  provider,
+  value,
+  catalog,
+  loading,
+  fieldKey,
+  label = 'Model',
+  allowDefault = true,
+  onChange,
+  onRefresh,
+}: ModelPickerProps) {
+  const baseId = `model-picker-${fieldKey.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   const listboxId = `${baseId}-listbox`;
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const toggleRef = useRef<HTMLButtonElement | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -53,7 +67,7 @@ export default function ModelPicker({ provider, value, catalog, loading, stepInd
             (choice.label ?? '').toLowerCase().includes(query),
         );
   const savedMissing = value.length > 0 && !models.some((choice) => choice.id === value);
-  const options: PickerOption[] = [{ key: 'cli-default', kind: 'default', value: '' }];
+  const options: PickerOption[] = allowDefault ? [{ key: 'cli-default', kind: 'default', value: '' }] : [];
   if (savedMissing) options.push({ key: 'saved', kind: 'saved', value });
   for (const choice of matches) {
     options.push({ key: `model:${choice.id}`, kind: 'model', value: choice.id, choice });
@@ -144,6 +158,7 @@ export default function ModelPicker({ provider, value, catalog, loading, stepInd
   function statusText(): string {
     if (loading) return 'Loading models…';
     if (catalog && catalog.message) return catalog.message;
+    if (value.length === 0 && !allowDefault) return 'An explicit model is required for this reviewer.';
     if (value.length > 0) {
       const match = models.find((choice) => choice.id === value);
       if (match) {
@@ -189,8 +204,9 @@ export default function ModelPicker({ provider, value, catalog, loading, stepInd
     <div className="model-picker">
       <div className="model-picker-control">
         <input
+          ref={inputRef}
           role="combobox"
-          aria-label="Model"
+          aria-label={label}
           aria-expanded={open}
           aria-controls={listboxId}
           aria-activedescendant={open && boundedIndex >= 0 ? `${baseId}-option-${boundedIndex}` : undefined}
@@ -198,7 +214,8 @@ export default function ModelPicker({ provider, value, catalog, loading, stepInd
           autoComplete="off"
           spellCheck={false}
           maxLength={120}
-          placeholder="CLI default"
+          required={!allowDefault}
+          placeholder={allowDefault ? 'CLI default' : 'Select a model'}
           value={draft}
           onFocus={(event) => {
             event.currentTarget.select();
@@ -206,7 +223,8 @@ export default function ModelPicker({ provider, value, catalog, loading, stepInd
             setSearch(null);
             setActiveIndex(0);
           }}
-          onBlur={() => {
+          onBlur={(event) => {
+            if (event.relatedTarget === toggleRef.current) return;
             setOpen(false);
             setDraft(value);
             setSearch(null);
@@ -222,6 +240,29 @@ export default function ModelPicker({ provider, value, catalog, loading, stepInd
             }
           }}
         />
+        <button
+          ref={toggleRef}
+          type="button"
+          className="button model-picker-toggle"
+          aria-label={open ? `Hide ${providerName} models` : `Show ${providerName} models`}
+          aria-expanded={open}
+          aria-controls={listboxId}
+          onClick={() => {
+            if (open) {
+              setOpen(false);
+              setDraft(value);
+              setSearch(null);
+              setActiveIndex(0);
+              return;
+            }
+            setOpen(true);
+            setSearch(null);
+            setActiveIndex(0);
+            inputRef.current?.focus();
+          }}
+        >
+          <span aria-hidden="true">▾</span>
+        </button>
         {catalog && catalog.status !== 'builtin' && (
           <button
             type="button"

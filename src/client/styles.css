@@ -243,6 +243,7 @@ label { font-size:13px; font-weight:500; }
 .model-picker-control { position:relative; display:flex; align-items:center; gap:6px; min-width:0; }
 .model-picker-control input { flex:1; }
 .model-picker-refresh { flex:none; padding:4px 9px; min-height:30px; font-size:12px; }
+.model-picker-toggle { flex:none; padding:4px 9px; min-height:30px; font-size:12px; line-height:1; }
 .model-picker-list { position:absolute; z-index:20; top:calc(100% + 4px); left:0; right:0; margin:0; padding:4px; max-height:280px; overflow-y:auto; list-style:none; background:var(--panel); border:1px solid var(--border); border-radius:6px; box-shadow:0 10px 24px #16231c1f; }
 .model-picker-option { display:flex; flex-direction:column; gap:2px; padding:7px 9px; border-radius:4px; cursor:pointer; }
 .model-picker-option.is-active { background:#eef3f0; }
