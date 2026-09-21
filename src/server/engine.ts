@@ -379,6 +379,14 @@ export class Engine {
       }
     }
     const step = run.steps[run.currentStep];
+    // Council and validation retries archive their evidence separately. Ordinary
+    // agents also need an immutable attempt before runSteps clears the transcript.
+    if (step && step.attempt > 0 && !step.definition.council && !step.validation) {
+      step.history ??= [];
+      step.history.push(structuredClone({execution:step.execution,conversation:step.conversation,toolCalls:step.toolCalls,attempt:step.attempt,status:step.status,output:step.output,error:step.error,feedback:step.feedback,startedAt:step.startedAt,finishedAt:step.finishedAt,costUsd:step.costUsd}));
+      step.toolCalls = [];
+      step.costUsd = null;
+    }
     if (step?.definition.council && step.council) {
       step.history ??= []; step.history.push({execution:step.execution,council:structuredClone(step.council),attempt:step.attempt,status:step.status,output:step.output,error:step.error,feedback:step.feedback,startedAt:step.startedAt,finishedAt:step.finishedAt,costUsd:step.costUsd});
       step.council.resumeRequested = true;

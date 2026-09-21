@@ -5,6 +5,9 @@ automatic evidence handoffs, valid Jev actions, and one preapproved Fable rescue
 after two Flash repairs. The target is five draft PRs with zero **unplanned**
 post-approval interventions. Merging remains manual.
 
+The completed [results](RELIABLE_DELIVERY_RESULTS.md) retain the missed
+zero-intervention target and every recovery action.
+
 The isolated server uses port 4320, its own data volume, and fresh worktrees
 from a committed source revision. Old pilot results and production runs are
 preserved. `scripts/pilots/reliable/tasks.mjs` defines five new developer tools,
