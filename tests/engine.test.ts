@@ -38,7 +38,23 @@ test('BLOCKED output cannot be approved; explicit revision resolves it',async()=
 
 test('failure requires manual retry and retains event history',async()=>{let calls=0;const f=await fixture(async()=>{if(++calls===1)throw new Error('Provider offline');return {output:'Recovered',sessionId:null,costUsd:null};});try{f.workflow([definition('build')]);const r=await f.create();await f.wait(r.id,'failed');const before=f.store.getEvents(r.id).length;f.engine.retry(r.id);const done=await f.wait(r.id,'completed');assert.equal(done.steps[0].attempt,2);assert.ok(f.store.getEvents(r.id).length>before);assert.ok(f.store.getEvents(r.id).some(e=>e.message.includes('Provider offline')));}finally{await f.close();}});
 
-test('cancellation aborts owned work and late completion cannot revive run',async()=>{let aborted=false;const f=await fixture(async(_s,_p,_w,signal)=>{await new Promise<void>(resolve=>{signal.addEventListener('abort',()=>{aborted=true;resolve();},{once:true});});return {output:'late',sessionId:null,costUsd:null};});try{f.workflow([definition('build')]);const r=await f.create();await f.wait(r.id,'running');await delay(30);f.engine.cancel(r.id);await delay(40);assert.equal(f.store.getRun(r.id)?.status,'cancelled');assert.ok(aborted);}finally{await f.close();}});
+test('cancellation aborts owned work and late completion cannot revive run',{timeout:10000},async()=>{
+ let aborted=false,notifyStarted!:()=>void;
+ const started=new Promise<void>(resolve=>{notifyStarted=resolve;});
+ const f=await fixture(async(_s,_p,_w,signal)=>{
+  await new Promise<void>(resolve=>{
+   signal.addEventListener('abort',()=>{aborted=true;resolve();},{once:true});
+   notifyStarted();
+  });
+  return {output:'late',sessionId:null,costUsd:null};
+ });
+ try{
+  f.workflow([definition('build')]);const r=await f.create();
+  // Running includes asynchronous evidence preparation; wait for the owned agent.
+  await started;f.engine.cancel(r.id);await delay(40);
+  assert.equal(f.store.getRun(r.id)?.status,'cancelled');assert.ok(aborted);
+ }finally{await f.close();}
+});
 
 test('demo uses no provider and clearly labels simulated output',async()=>{const f=await fixture(async()=>{throw new Error('Provider must not run');});try{f.workflow([definition('a'),definition('b')]);const r=await f.create('demo');const done=await f.wait(r.id,'completed');assert.match(done.steps[0].output,/Demo output/);assert.equal(done.steps[0].costUsd,null);}finally{await f.close();}});
 
