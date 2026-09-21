@@ -1,0 +1,29 @@
+name: agentloom-reliable-pilot
+services:
+  platform:
+    image: agentloom-reliable:pilot
+    build: ../../..
+    container_name: agentloom-reliable-pilot
+    init: true
+    command: [node, /pilot/server.mjs]
+    security_opt: [seccomp:unconfined, apparmor:unconfined]
+    group_add: ["0"]
+    environment:
+      AGENTLOOM_LIVE_PILOT: reliable-delivery
+    ports: ["127.0.0.1:4320:4317"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/pilot:ro
+      - pilot_data:/data
+      - pilot_work:/workspaces
+      - agent_home:/home/node
+    stop_grace_period: 20s
+volumes:
+  pilot_data:
+    name: agentloom_reliable_pilot_data
+  pilot_work:
+    external: true
+    name: agentloom_jev_pilot_work
+  agent_home:
+    external: true
+    name: agentloom_agent_home

@@ -1,3 +1,4 @@
+import { secondOpinionAvailable } from '../shared/automation';
 import CouncilPanel from './CouncilPanel';
 import ValidationPanel from './ValidationPanel';
 import GitRunPanel from './GitRunPanel';
@@ -307,7 +308,7 @@ export default function RunDetail({ run, events, busy, onAction, onBack, onMessa
                 {selectedStep.error}
               </div>
             ) : null}
-            {selectedStep?.council && <CouncilPanel key={`${run.id}-${selectedStep.attempt}`} evidence={selectedStep.council} busy={busy} onSecondOpinion={activeStep===run.currentStep && ['blocked','waiting_approval'].includes(run.status) && selectedStep.definition.council?.secondOpinion && !selectedStep.council.secondOpinion ? async question=>{const response=await fetch(`/api/runs/${run.id}/second-opinion`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question})});if(!response.ok){const body=await response.json();throw Error(body.error??'Unable to request second opinion.');}} : undefined} onChallenge={activeStep === run.currentStep && ['blocked','waiting_approval'].includes(run.status) ? question => onMessage(selectedStep.definition.id, question, crypto.randomUUID()) : undefined} />}
+            {selectedStep?.council && <CouncilPanel key={`${run.id}-${selectedStep.attempt}`} evidence={selectedStep.council} busy={busy} onSecondOpinion={activeStep===run.currentStep && ['blocked','waiting_approval'].includes(run.status) && secondOpinionAvailable(run) && !selectedStep.council.secondOpinion ? async question=>{const response=await fetch(`/api/runs/${run.id}/second-opinion`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question})});if(!response.ok){const body=await response.json();throw Error(body.error??'Unable to request second opinion.');}} : undefined} onChallenge={activeStep === run.currentStep && ['blocked','waiting_approval'].includes(run.status) ? question => onMessage(selectedStep.definition.id, question, crypto.randomUUID()) : undefined} />}
             {selectedStep?.validation && <ValidationPanel evidence={selectedStep.validation} />}
             {selectedStep && !selectedStep.definition.council && <PlanningChat key={`${run.id}-${selectedStep.definition.id}`} run={run} step={selectedStep} events={events} current={activeStep === run.currentStep} busy={busy} onSend={onMessage} draftSuggestion={draftSuggestion?.stepId === selectedStep.definition.id ? draftSuggestion : null} />}
           </div>

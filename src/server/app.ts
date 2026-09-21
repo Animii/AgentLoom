@@ -160,7 +160,7 @@ const runInputSchema = z.strictObject({
   expectedWorkspaceMode: z.enum(['direct', 'isolated', 'worktree']).optional(),
   workflowId: idField,
   mode: z.enum(['live', 'demo']),
-  automation:z.strictObject({publication:z.enum(['manual','draft'])}).optional(),
+  automation:z.strictObject({publication:z.enum(['manual','draft']),escalation:z.literal('fable').optional()}).optional(),
 });
 
 const emptyBodySchema = z.strictObject({});
