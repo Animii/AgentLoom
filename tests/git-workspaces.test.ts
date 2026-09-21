@@ -53,6 +53,19 @@ async function fixture(){
  const prepare=async(id:string)=>{const run=makeRun(id);const prepared=await prepareGitWorkspace(config,source,run);Object.assign(run,prepared);return run;};
  return {root,source,config,makeRun,prepare,close:()=>rm(root,{recursive:true,force:true})};
 }
+test('local fetch trusts the connected source in its upload-pack subprocess',async()=>{
+ const f=await fixture();const before=process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER;
+ try{
+  process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER='1';
+  const run=await f.prepare('mounted-owner');
+  assert.equal((await readFile(path.join(run.workspace,'app.txt'),'utf8')).trim(),'original');
+  assert.equal(run.git?.baseBranch,'main');
+ }finally{
+  if(before===undefined)delete process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER;else process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER=before;
+  await f.close();
+ }
+});
+
 test('real worktrees isolate concurrent runs and resume without losing edits',async()=>{
  const f=await fixture();try{
  const [a,b]=await Promise.all([f.prepare('one'),f.prepare('two')]);await writeFile(path.join(a.workspace,'app.txt'),'changed\n');await writeFile(path.join(a.workspace,'new.txt'),'new\n');

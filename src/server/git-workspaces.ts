@@ -32,7 +32,16 @@ export async function prepareGitWorkspace(config:AppConfig,source:string,run:Run
   await mkdir(root,{recursive:true});
   try{const entry=await lstat(cache);if(!entry.isDirectory()||entry.isSymbolicLink())throw new Error('Invalid managed Git repository.');}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;await git(root,['init','--bare',cache]);}
   const metadata=run.git??{branch:`agentloom/${run.id}`,baseBranch:info.branch,baseCommit:info.commit,repository:info.repository};
-  await git(cache,['fetch','--no-tags',source,metadata.baseCommit]);
+  // Local fetch starts upload-pack, which drops command-scoped Git config.
+  // Trust only this checked source in a temporary config inherited by that child.
+  const fetchConfig=await mkdtemp(path.join(tmpdir(),'agentloom-fetch-'));
+  try{
+   const configFile=path.join(fetchConfig,'config');
+   const sourceGitDir=(await git(source,['rev-parse','--absolute-git-dir'])).trim();
+   for(const directory of [source,sourceGitDir])await git(cache,['config','--file',configFile,'--add','safe.directory',directory]);
+   try{await git(cache,['fetch','--no-tags',source,metadata.baseCommit],{GIT_CONFIG_GLOBAL:configFile});}
+   catch{throw new Error('Could not fetch the base commit from the connected local project. Check its mounted Git directory and file permissions, then retry this crate.');}
+  }finally{await rm(fetchConfig,{recursive:true,force:true});}
   onPlan?.(metadata);
   const workspace=path.resolve(config.workspaceRoot,'runs',run.id);const branch=`agentloom/${run.id}`;
   await mkdir(path.dirname(workspace),{recursive:true});
