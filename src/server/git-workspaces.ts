@@ -139,8 +139,11 @@ export async function readCratePr(run:Run):Promise<{state:'OPEN'|'CLOSED'|'MERGE
  if(!['OPEN','CLOSED','MERGED'].includes(data.state)||!/^[a-f0-9]{40}$/.test(data.headRefOid))throw Error('GitHub returned invalid PR state.');
  const events:{id:string;head:string;kind:'review'|'ci';summary:string}[]=[];
  const number=run.git.prUrl.split('/').at(-1)!;
- const reviews=(JSON.parse(await command('gh',['api','--paginate','--slurp',`repos/${run.git.repository}/pulls/${number}/reviews`],run.workspace)) as {id:number;state:string;body:string;commit_id:string;user:{login:string}}[][]).flat();
- const comments=(JSON.parse(await command('gh',['api','--paginate','--slurp',`repos/${run.git.repository}/pulls/${number}/comments`],run.workspace)) as {pull_request_review_id:number;path:string;line:number|null;body:string}[][]).flat();
+ // The Debian gh version in our image supports pagination and jq, but not --slurp.
+ // Emit one JSON value per line so all pages and multiline review bodies remain intact.
+ const pages=async<T>(endpoint:string):Promise<T[]> => (await command('gh',['api','--paginate',endpoint,'--jq','.[] | @json'],run.workspace)).split(/\r?\n/).filter(line=>line.trim()).map(line=>JSON.parse(line) as T);
+ const reviews=await pages<{id:number;state:string;body:string;commit_id:string;user:{login:string}}>(`repos/${run.git.repository}/pulls/${number}/reviews`);
+ const comments=await pages<{pull_request_review_id:number;path:string;line:number|null;body:string}>(`repos/${run.git.repository}/pulls/${number}/comments`);
  const latestByAuthor=new Map<string,typeof reviews[number]>();
  for(const review of reviews)latestByAuthor.set(review.user.login,review);
  for(const review of latestByAuthor.values())if(['CHANGES_REQUESTED','COMMENTED'].includes(review.state)){
