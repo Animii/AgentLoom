@@ -84,6 +84,7 @@ export default function NewRunDialog({
   }, [open, initialDemo, initialProject, projects, workflows]);
 
   useEffect(() => { if (open && !project && projects.length) setProject(initialProject ?? projects[0].id); }, [open, project, projects, initialProject]);
+  useEffect(() => { if (open && !workflowSelection && workflows.length) setWorkflowSelection(workflows.find(w=>w.id==='single-review-delivery')?.id ?? workflows[0].id); }, [open, workflowSelection, workflows]);
 
   const canSubmit =
     !submitting &&
