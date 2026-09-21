@@ -1,10 +1,12 @@
-import {runValidationCommand, sourceFingerprint, evidenceSummary} from './validation.js';
+import { runCouncil, councilSummary, assertCouncilCurrent } from './council.js';
+import { councilReady } from '../shared/council.js';
+import {runValidationCommand, sourceFingerprint, evidenceSummary, readSourceSnapshot, snapshotFingerprint} from './validation.js';
 import type {ValidationEvidence, ValidationSignals} from '../shared/types.js';
-import { prepareGitWorkspace } from './git-workspaces.js';
+import { prepareGitWorkspace, previewRunGit } from './git-workspaces.js';
 import { uncertainAssessmentToken } from '../shared/review-assessment.js';
 import { EXECUTION_POLICY } from './execution-policy.js';
 import { reworkTarget } from '../shared/rework.js';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
@@ -91,6 +93,7 @@ export class Engine {
     expectedWorkspaceMode?: 'direct' | 'isolated' | 'worktree';
     workflowId: string;
     mode: 'live' | 'demo';
+    automation?: {publication:'manual'|'draft'};
   }): Promise<Run> {
     const workflow = this.store.getWorkflow(input.workflowId);
     if (!workflow) {
@@ -99,6 +102,7 @@ export class Engine {
     const now = new Date().toISOString();
     const projectLocation = await this.projects.forRun(input.project);
     if (input.expectedWorkspaceMode && input.expectedWorkspaceMode !== (projectLocation?.workspaceMode ?? 'isolated')) throw new Error('The project workspace mode changed. Reopen New run to review its current access before starting.');
+    if(input.automation && (input.mode!=='live' || projectLocation?.workspaceMode!=='worktree' || !workflow.steps[0]?.planning || !workflow.steps.at(-1)?.council || workflow.steps.slice(1,-1).some(s=>s.approval))) throw Error('Automation requires a live Git worktree, approved first plan, automatic intermediate steps and final outcome council.');
     const run: Run = {
       id: randomUUID(),
       title: input.title,
@@ -127,6 +131,7 @@ export class Engine {
       workspace: '',
       error: null,
     };
+    if(input.automation)run.automation={version:1,publication:input.automation.publication,status:'awaiting_plan',repairsUsed:0,maxRepairs:2,message:'Approve the plan to authorize up to two repairs and the selected delivery policy.',decisions:[]};
     this.projects.assertNoConflict(run);
     this.persist(run);
     this.emitEvent(run.id, null, 'status', 'Run queued.');
@@ -134,7 +139,20 @@ export class Engine {
     return run;
   }
 
-  approve(id: string, acknowledgedAssessment?: string): Run {
+  async approveCurrent(id: string, acknowledgedAssessment?: string, actor:'user'|'controller'='user'): Promise<Run> {
+    const initial = this.requireRun(id);
+    const revision = JSON.stringify(initial);
+    if (initial.currentStep === initial.steps.length - 1) {
+      await this.assertValidationCurrent(id);
+      const preview = initial.git ? await previewRunGit(initial, this.config) : undefined;
+      const latest = this.requireRun(id);
+      if (JSON.stringify(latest) !== revision) throw Error('The run changed during approval. Review its current state.');
+      if (preview && latest.git) { latest.git.approvedTree = preview.tree; this.persist(latest); }
+    }
+    return this.approve(id, acknowledgedAssessment, actor);
+  }
+
+  approve(id: string, acknowledgedAssessment?: string, actor: 'user'|'controller' = 'user'): Run {
     const run = this.requireRun(id);
     if (run.status !== 'waiting_approval') {
       throw new Error(`Cannot approve run in status "${run.status}"`);
@@ -143,16 +161,19 @@ export class Engine {
     if (!step || step.status !== 'waiting_approval') {
       throw new Error('Current step is not waiting for approval');
     }
+    if (run.mode === 'live' && step.definition.council && !councilReady(step)) throw Error('Council findings and missing evidence must be resolved before approval.');
     if (BLOCKED_PATTERN.test(step.output)) throw Error('Resolve the reported blocker before approving.');
     if (step.assessment?.attempt === step.attempt && step.assessment.status === 'running') throw new Error('Wait for Jev to finish classifying this review before approving.');
     const uncertaintyToken = uncertainAssessmentToken(step);
     if (uncertaintyToken && acknowledgedAssessment !== uncertaintyToken) throw new Error('Acknowledge the current uncertain Jev assessment before approving.');
     if (run.mode==='live' && run.currentStep===run.steps.length-1 && run.steps.some(s=>s.definition.validation && (!s.validation || s.validation.status!=='passed' || s.validation.before!==s.validation.after))) throw Error('Recorded validation must pass before final approval.');
     if (step.pendingAskId) throw new Error('Answer the planner questions before approving a plan.');
+    if(actor==='controller' && (!run.automation?.approvedAt || run.currentStep!==run.steps.length-1))throw Error('Controller approval is not authorized.');
+    if(run.automation && step.definition.planning){run.automation.approvedAt=new Date().toISOString();run.automation.contractHash=createHash('sha256').update(JSON.stringify({task:run.task,plan:step.output,definitions:run.steps.map(s=>s.definition)})).digest('hex');run.automation.status='active';run.automation.message='Working within the approved plan.';}
     step.status = 'completed';
     step.finishedAt = step.finishedAt ?? new Date().toISOString();
     run.currentStep += 1;
-    this.store.addEvent(id, step.definition.id, 'approval', `Approved step "${step.definition.name}".${uncertaintyToken ? " User explicitly acknowledged the uncertain Jev assessment." : ""}`);
+    this.store.addEvent(id, step.definition.id, 'approval', `Approved step "${step.definition.name}" by ${actor === 'controller' ? 'the authorized Jev controller' : 'the user'}.${uncertaintyToken ? " User explicitly acknowledged the uncertain Jev assessment." : ""}`);
     if (run.currentStep >= run.steps.length) {
       run.status = 'completed';
       this.persist(run);
@@ -180,7 +201,7 @@ export class Engine {
     if (!step) {
       throw new Error('Current step not found');
     }
-    if (isPlanningStep(step.definition) || step.conversation) return this.chat(id, step.definition.id, trimmedFeedback, randomUUID());
+    if (step.definition.council || isPlanningStep(step.definition) || step.conversation) return this.chat(id, step.definition.id, trimmedFeedback, randomUUID());
     const priorOutput = step.output;
     this.priorOutputs.set(revisionKey(id, run.currentStep), priorOutput);
     this.store.addEvent(
@@ -204,10 +225,11 @@ export class Engine {
     return run;
   }
 
-  rework(id: string): Run {
+  rework(id: string, automated = false): Run {
     const run = this.requireRun(id);
     const target = reworkTarget(run);
     if (target < 0) throw new Error('This step has no eligible completed implementation to return to.');
+    if(automated){if(!run.automation?.approvedAt || run.automation.repairsUsed>=run.automation.maxRepairs)throw Error('Automatic repair budget exhausted.');run.automation.repairsUsed++;run.automation.status='active';}
     const reviewIndex = run.currentStep;
     const review = run.steps[reviewIndex];
     if (!review.output.trim()) throw new Error('Review findings are required.');
@@ -217,11 +239,11 @@ export class Engine {
     for (let i = target; i <= reviewIndex; i++) {
       const step = run.steps[i];
       step.history ??= [];
-      step.history.push({ validation: step.validation, conversation: step.conversation, toolCalls: step.toolCalls, attempt: step.attempt, status: step.status, output: step.output, error: step.error, feedback: step.feedback, startedAt: step.startedAt, finishedAt: step.finishedAt, costUsd: step.costUsd });
+      step.history.push({ council: step.council, validation: step.validation, conversation: step.conversation, toolCalls: step.toolCalls, attempt: step.attempt, status: step.status, output: step.output, error: step.error, feedback: step.feedback, startedAt: step.startedAt, finishedAt: step.finishedAt, costUsd: step.costUsd });
       this.priorOutputs.delete(revisionKey(id, i));
       step.output = ''; step.error = null; step.sessionId = null; step.feedback = i === target ? feedback : `Independently verify the fixes against the approved requirements and the prior findings. Run documented validation where permitted. Report BLOCKED if any blocking finding remains.\n\nPrior findings:\n${findings}`;
       step.status = 'pending'; step.startedAt = null; step.finishedAt = null; step.costUsd = null;
-      step.validation = undefined; step.toolCalls = []; step.pendingAskId = undefined; step.conversation = undefined;
+      step.council = undefined; step.validation = undefined; step.toolCalls = []; step.pendingAskId = undefined; step.conversation = undefined;
     }
     // Re-review always requires a human decision, even for normally automatic reviews.
     review.definition.approval = true;
@@ -230,6 +252,20 @@ export class Engine {
     this.emitEvent(id, review.definition.id, 'revision', `Sent findings to "${run.steps[target].definition.name}". Validation and review will run again; previous attempts are preserved.`);
     this.schedule();
     return run;
+  }
+
+  revalidate(id:string):Run {
+    const run=this.requireRun(id);
+    if(!['blocked','waiting_approval','completed'].includes(run.status)||run.git?.publishing||run.git?.prUrl)throw Error('Finish the current work before repeating validation.');
+    const index=run.steps.findIndex(s=>s.definition.validation);
+    if(index<0||run.currentStep<index)throw Error('This run has not reached recorded validation.');
+    for(const step of run.steps.slice(index)){
+      step.history??=[];step.history.push({council:step.council,validation:step.validation,conversation:step.conversation,toolCalls:step.toolCalls,attempt:step.attempt,status:step.status,output:step.output,error:step.error,feedback:step.feedback,startedAt:step.startedAt,finishedAt:step.finishedAt,costUsd:step.costUsd});
+      step.status='pending';step.output='';step.error=null;step.sessionId=null;step.startedAt=null;step.finishedAt=null;step.costUsd=null;step.council=undefined;step.validation=undefined;step.toolCalls=[];step.conversation=undefined;step.pendingAskId=undefined;
+    }
+    if(run.git)delete run.git.approvedTree;
+    if(run.automation){run.automation.status='paused';run.automation.message='Repeating validation and council. Resume automation after inspecting the new results.';}
+    run.currentStep=index;run.status='queued';run.error=null;this.persist(run);this.schedule();return run;
   }
 
   chat(id: string, stepId: string, text: string, messageId: string): Run {
@@ -249,6 +285,7 @@ export class Engine {
     }
     this.projects.assertNoConflict(run);
     const stepIndex = run.steps.indexOf(step);
+    if (step.definition.council) return this.challengeCouncil(id, stepId, content, messageId);
     if (step.status === 'pending') throw new Error('Start this step before sending a message.');
     initializeConversation(run, step);
     step.conversation!.push(message('user', content, messageId));
@@ -259,11 +296,11 @@ export class Engine {
       for (const downstream of run.steps.slice(stepIndex + 1)) {
         if (downstream.attempt > 0 && downstream.status !== 'pending') {
           downstream.history ??= [];
-          downstream.history.push({ validation: downstream.validation, conversation: downstream.conversation, attempt: downstream.attempt, status: downstream.status, output: downstream.output, error: downstream.error, feedback: downstream.feedback, startedAt: downstream.startedAt, finishedAt: downstream.finishedAt, costUsd: downstream.costUsd, toolCalls: downstream.toolCalls });
+          downstream.history.push({ council: downstream.council, validation: downstream.validation, conversation: downstream.conversation, attempt: downstream.attempt, status: downstream.status, output: downstream.output, error: downstream.error, feedback: downstream.feedback, startedAt: downstream.startedAt, finishedAt: downstream.finishedAt, costUsd: downstream.costUsd, toolCalls: downstream.toolCalls });
         }
         downstream.status = 'pending'; downstream.output = ''; downstream.feedback = ''; downstream.error = null;
         downstream.startedAt = null; downstream.finishedAt = null; downstream.sessionId = null; downstream.costUsd = null;
-        downstream.validation = undefined; downstream.conversation = undefined; downstream.pendingAskId = undefined; downstream.toolCalls = [];
+        downstream.council = undefined; downstream.validation = undefined; downstream.conversation = undefined; downstream.pendingAskId = undefined; downstream.toolCalls = [];
         this.priorOutputs.delete(revisionKey(id, run.steps.indexOf(downstream)));
       }
     }
@@ -285,6 +322,18 @@ export class Engine {
     return run;
   }
 
+  private challengeCouncil(id: string, stepId: string, question: string, messageId: string): Run {
+    const run = this.requireRun(id);
+    const step = run.steps[run.currentStep];
+    if (!step || step.definition.id !== stepId || !['blocked', 'waiting_approval'].includes(run.status) || !step.council) throw Error('Only the current completed council can receive a challenge.');
+    if (step.council.challenge) throw Error('The focused challenge round is already used. Send findings to implementation or start a new run with clarified requirements.');
+    if (step.council.status === 'stale') throw Error('Council evidence is stale. Repeat implementation and validation.');
+    step.conversation ??= []; step.conversation.push(message('user', question, messageId));
+    step.council.challenge = { question, requested: true, reviewers: step.definition.council!.reviewers.map(member => ({member, status:'pending', output:'', costUsd:null})) };
+    step.status = 'pending'; run.status = 'queued'; run.error = null; step.error = null;
+    this.persist(run); this.emitEvent(id, stepId, 'revision', 'Requested the single focused council challenge round.'); this.schedule(); return run;
+  }
+
   retry(id: string): Run {
     const run = this.requireRun(id);
     this.projects.assertNoConflict(run);
@@ -300,6 +349,11 @@ export class Engine {
       }
     }
     const step = run.steps[run.currentStep];
+    if (step?.definition.council && step.council) {
+      step.history ??= []; step.history.push({council:structuredClone(step.council),attempt:step.attempt,status:step.status,output:step.output,error:step.error,feedback:step.feedback,startedAt:step.startedAt,finishedAt:step.finishedAt,costUsd:step.costUsd});
+      step.council.resumeRequested = true;
+      if(step.council.challenge) step.council.challenge.requested = true;
+    }
     if (step) {
       if (step.status === 'failed' || step.status === 'running') {
         step.status = 'pending';
@@ -440,6 +494,14 @@ export class Engine {
       if (signal.aborted) {
         return;
       }
+      const prepared = this.requireRun(runId);
+      if (!prepared.sourceBaseline && prepared.steps.some(s=>s.definition.council) && prepared.steps.every(s=>s.attempt===0)) {
+        const files = await readSourceSnapshot(workspace);
+        const latest=this.requireRun(runId);
+        if(signal.aborted||latest.status!=='running')return;
+        latest.sourceBaseline = {fingerprint:snapshotFingerprint(files),files:files.map(file=>({path:file.relative,hash:createHash('sha256').update(file.content).digest('hex')}))};
+        this.persist(latest);
+      }
       await this.runSteps(runId, workspace, signal);
     } catch (error) {
       this.handleRunError(runId, signal, error);
@@ -513,6 +575,7 @@ export class Engine {
       }
       if (isPlanningStep(step.definition)) initializeConversation(run, step);
       const prompt = this.buildPrompt(run, step);
+      if (step.council && !step.council.challenge?.requested && !step.council.resumeRequested) { step.history ??= []; step.history.push({council:step.council,attempt:step.attempt,status:step.status,output:step.output,error:step.error,feedback:step.feedback,startedAt:step.startedAt,finishedAt:step.finishedAt,costUsd:step.costUsd}); step.council=undefined; }
       if (step.validation) { step.history ??= []; step.history.push({validation:step.validation,attempt:step.attempt,status:step.status,output:step.output,error:step.error,feedback:step.feedback,startedAt:step.startedAt,finishedAt:step.finishedAt,costUsd:step.costUsd}); step.validation=undefined; }
       step.status = 'running';
       step.attempt += 1;
@@ -573,6 +636,12 @@ export class Engine {
         try { await this.assertValidationCurrent(runId); }
         catch(error) { result.output += `\n\nBLOCKED: ${errorMessage(error)} Re-run implementation/validation before approval.`; currentStep.output=result.output; }
       }
+      // Freshness checks await filesystem work. Preserve takeover/cancellation that
+      // arrived while those checks were running instead of saving the old policy.
+      const afterChecks=this.store.getRun(runId);
+      if(signal.aborted || !afterChecks || afterChecks.status!=='running' || afterChecks.currentStep!==current.currentStep)return;
+      current.automation=afterChecks.automation;
+      current.git=afterChecks.git;
       if (currentStep.conversation) {
         currentStep.conversation.push(message('assistant', result.output));
         checkConversation(currentStep);
@@ -618,6 +687,7 @@ export class Engine {
     workspace: string,
     signal: AbortSignal,
   ): Promise<AgentResult> {
+    if (step.definition.council) return this.runCouncilStep(run, step, signal);
     if (step.definition.validation) return this.runRecordedValidation(run,step,workspace,signal);
     if (run.mode === 'demo') {
       return this.runDemoStep(run, step, signal);
@@ -631,6 +701,8 @@ export class Engine {
   async assertValidationCurrent(id: string): Promise<void> {
     const run=this.requireRun(id);
     if(run.mode==='demo') return;
+    const final = run.steps.at(-1);
+    if (final?.definition.council && run.currentStep >= run.steps.length - 1 && final.council?.status !== 'running') await assertCouncilCurrent(run, final);
     const validation=run.steps.filter(s=>s.definition.validation);
     if(!validation.length) return;
     for(const step of validation) {
@@ -638,6 +710,17 @@ export class Engine {
       if(!evidence || evidence.attempt!==step.attempt || evidence.status!=='passed' || !evidence.commands.length || evidence.commands.some(c=>c.status!=='passed') || evidence.before!==evidence.after) throw Error('Recorded validation is missing, failed, or changed source files.');
       if(await sourceFingerprint(run.workspace)!==evidence.after) throw Error('Source changed since recorded validation.');
     }
+  }
+
+  private async runCouncilStep(run: Run, step: StepRun, signal: AbortSignal): Promise<AgentResult> {
+    const evidence = await runCouncil(run, step, this.config, this.execute, signal, evidence => {
+      const latest = this.requireRun(run.id); const target = latest.steps[latest.currentStep];
+      if ((!['running','cancelled','interrupted'].includes(latest.status)) || target?.definition.id !== step.definition.id || target.attempt !== step.attempt) return;
+      target.council = structuredClone(evidence); target.output = councilSummary(evidence); this.persist(latest);
+    }, event => this.handleAgentEvent(run.id, step.definition.id, event, signal));
+    const reviews = [...evidence.reviewers, ...(evidence.challenge?.reviewers ?? [])];
+    const costs = [...reviews.map(r => r.costUsd), evidence.chair?.costUsd, evidence.challenge?.chair?.costUsd].filter((c): c is number => typeof c === 'number');
+    return {output:councilSummary(evidence), sessionId:null, costUsd:costs.length ? costs.reduce((a,b)=>a+b,0) : null};
   }
 
   private async runRecordedValidation(run:Run,step:StepRun,workspace:string,signal:AbortSignal):Promise<AgentResult>{
@@ -930,6 +1013,11 @@ export class Engine {
     }
     let stepId: string | null = null;
     if (step && step.status === 'running') {
+      if(step.council){
+        step.council.status='needs_evidence';step.council.issues=['Server restarted; completed reports and partial output are preserved. Retry unfinished reviews.'];
+        for(const review of [...step.council.reviewers,...(step.council.challenge?.reviewers??[])])if(review.status==='running'||review.status==='pending'){review.status='failed';review.error=RESTART_ERROR;}
+        for(const chair of [step.council.chair,step.council.challenge?.chair])if(chair?.status==='running'){chair.status='failed';chair.error=RESTART_ERROR;}
+      }
       step.status = 'failed';
       step.error = RESTART_ERROR;
       step.finishedAt = new Date().toISOString();

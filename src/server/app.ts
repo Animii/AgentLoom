@@ -1,4 +1,5 @@
 import {assessValidation} from './validation.js';
+import {Automation} from './automation.js';
 import { previewRunGit, publishDraftPr } from './git-workspaces.js';
 import { canAssessReview } from '../shared/review-assessment.js';
 import { createReviewAssessor } from './review-assessment.js';
@@ -92,10 +93,16 @@ const stepDefinitionSchema = z
     access: z.enum(['read-only', 'workspace-write']),
     approval: z.boolean(),
     planning: z.boolean().optional(),
+    council: z.strictObject({reviewers:z.array(z.strictObject({id:idField,name:nameField,focus:z.string().min(1).max(2000),provider:z.enum(['claude','codex','opencode']),model:modelField.refine(v=>v.trim().length>0,'Council models must be explicit.'),effort:z.string()})).length(3)}).optional(),
     validation: z.strictObject({commands:z.array(z.strictObject({executable:z.string().min(1).max(1000).regex(/^[^\x00-\x1f]+$/),args:z.array(z.string().max(4000).refine(v=>!v.includes('\0'))).max(50),timeoutMs:z.number().int().min(100).max(3600000)})).min(1).max(8)}).optional(),
   })
   .superRefine((step, ctx) => {
     if(step.validation&&(step.planning||step.access!=='read-only'))ctx.addIssue({code:'custom',message:'Validation steps must be read-only and cannot be planning steps.'});
+    if(step.council){
+      if(step.validation || step.planning || step.access!=='read-only' || !step.approval || !step.model.trim())ctx.addIssue({code:'custom',message:'Council requires an explicit chair model, read-only access and approval; it cannot be planning or validation.'});
+      if(new Set(step.council.reviewers.map(r=>r.id)).size!==3 || step.council.reviewers.some(r=>r.id==='chair'))ctx.addIssue({code:'custom',message:'Council reviewer IDs must be unique and cannot be chair.'});
+      for(const member of step.council.reviewers)if(member.effort && !PROVIDER_EFFORTS[member.provider].includes(member.effort))ctx.addIssue({code:'custom',message:'Invalid council reviewer effort.'});
+    }
     const allowed = PROVIDER_EFFORTS[step.provider];
     if (step.effort !== '' && !allowed.includes(step.effort)) {
       ctx.addIssue({
@@ -128,6 +135,11 @@ const workflowSchema = z
         });
       }
       seen.add(step.id);
+      if(step.council){
+        if(index!==workflow.steps.length-1 || !workflow.steps.slice(0,index).some(s=>s.validation))ctx.addIssue({code:'custom',message:'Council must be the final step after recorded validation.'});
+        const writers=workflow.steps.slice(0,index).filter(s=>s.access==='workspace-write');
+        if(writers.some(w=>step.council!.reviewers.some(r=>r.provider===w.provider && (!w.model.trim() || r.model.toLowerCase()===w.model.toLowerCase())) || step.provider===w.provider && (!w.model.trim() || step.model.toLowerCase()===w.model.toLowerCase())))ctx.addIssue({code:'custom',message:'The implementer model cannot be an independent council reviewer or chair.'});
+      }
       if(step.validation && (index===0 || index===workflow.steps.length-1 || !workflow.steps.slice(0,index).some(s=>s.approval&&s.planning) || !workflow.steps.at(-1)!.approval || workflow.steps.at(-1)!.access!=='read-only'))ctx.addIssue({code:'custom',message:'Recorded validation requires an approved planning step before it and a final read-only review with approval.'});
     });
   });
@@ -147,6 +159,7 @@ const runInputSchema = z.strictObject({
   expectedWorkspaceMode: z.enum(['direct', 'isolated', 'worktree']).optional(),
   workflowId: idField,
   mode: z.enum(['live', 'demo']),
+  automation:z.strictObject({publication:z.enum(['manual','draft'])}).optional(),
 });
 
 const emptyBodySchema = z.strictObject({});
@@ -276,6 +289,7 @@ export async function createApp(config: AppConfig, options: CreateAppOptions = {
   const projects = new Projects(store, config);
   let evaluateJev: ReturnType<typeof registerJev> | undefined;
   let assessor: ReturnType<typeof createReviewAssessor> | undefined;
+  let automation:Automation|undefined;
   const engine = new Engine(store, config, options.execute ?? createExecutor(config), projects, (id,stepId) => assessor?.assess(id,stepId), (run,evidence)=>assessValidation(run,evidence,evaluateJev));
   app.decorate('store', store);
   app.decorate('engine', engine);
@@ -289,6 +303,7 @@ export async function createApp(config: AppConfig, options: CreateAppOptions = {
 
   app.addHook('onClose', async () => {
     modelCatalogs?.close();
+    await automation?.close();
     await engine.shutdown();
     await Promise.allSettled(publishing.values());
     await assessor?.close();
@@ -333,6 +348,33 @@ export async function createApp(config: AppConfig, options: CreateAppOptions = {
   });
 
   evaluateJev = registerJev(app, config, options.jevFetch ?? fetch);
+  async function publish(id:string,input?:{token:string;title:string;body:string}){
+    const run=store.getRun(id);if(!run?.git || run.status!=='completed'||run.mode!=='live')throw Error('Complete and approve the worktree run first.');
+    if(run.git.prUrl)return {url:run.git.prUrl,commit:run.git.publishedCommit};
+    if(publishing.has(id))throw Error('PR creation is already in progress.');
+    run.git.publishing=true;store.saveRun(run);
+    const job=(async()=>{await engine.assertValidationCurrent(id);const preview=await previewRunGit(run,config);if(!run.git?.approvedTree||preview.tree!==run.git.approvedTree)throw Error('Files changed after approval. Revalidate and approve the current files.');return (options.publishPr??publishDraftPr)(run,config,input??{token:preview.token,title:preview.title,body:preview.body});})();
+    publishing.set(id,job);
+    try{const result=await job;const latest=store.getRun(id)!;latest.git={...latest.git!,prUrl:result.url,publishedCommit:result.commit,publishing:false};store.saveRun(latest);store.addEvent(id,null,'log',`Draft PR created: ${result.url}`);return result;}
+    finally{publishing.delete(id);const latest=store.getRun(id);if(latest?.git?.publishing){latest.git.publishing=false;store.saveRun(latest);}}
+  }
+  automation=new Automation(store,engine,evaluateJev,id=>publish(id));
+  app.addHook('preHandler',async(request,reply)=>{
+    const match=/^\/api\/runs\/([^/]+)\/(messages|revise|rework|retry|cancel|approve)$/.exec(request.url.split('?')[0]);
+    if(request.method!=='POST'||!match)return;
+    const run=store.getRun(match[1]);
+    if(!run?.automation?.approvedAt)return;
+    try{automation!.pause(run.id,'You took control of this run. Resume automation when ready.');}catch(error){return sendError(reply,409,errorMessage(error));}
+  });
+  app.post<{Params:{id:string;action:string}}>('/api/runs/:id/automation/:action',async(request,reply)=>{
+    if(!emptyBodySchema.safeParse(bodyOrEmpty(request.body)).success)return sendError(reply,400,'Expected an empty body.');
+    if(!store.getRun(request.params.id)?.automation)return sendError(reply,404,'Automated run not found.');
+    try{if(request.params.action==='pause')automation!.pause(request.params.id);else if(request.params.action==='resume')automation!.resume(request.params.id);else return sendError(reply,404,'Unknown automation action.');return store.getRun(request.params.id);}catch(error){return sendError(reply,409,errorMessage(error));}
+  });
+  app.post<{Params:{id:string}}>('/api/runs/:id/revalidate',async(request,reply)=>{
+    if(!emptyBodySchema.safeParse(bodyOrEmpty(request.body)).success)return sendError(reply,400,'Expected an empty body.');
+    try{automation!.pause(request.params.id);return engine.revalidate(request.params.id);}catch(error){return sendError(reply,409,errorMessage(error));}
+  });
   assessor = createReviewAssessor(store, evaluateJev);
   app.post<{Params:{id:string;stepId:string}}>('/api/runs/:id/steps/:stepId/assessment', async(request,reply)=>{
     const parsed=emptyBodySchema.safeParse(bodyOrEmpty(request.body));
@@ -460,12 +502,9 @@ export async function createApp(config: AppConfig, options: CreateAppOptions = {
     if(run.git?.prUrl)return {url:run.git.prUrl};
     if(run.mode!=='live'||run.status!=='completed'||!run.git)return sendError(reply,409,'Complete and approve the worktree run first.');
     if(publishing.has(run.id))return sendError(reply,409,'PR creation is already in progress.');
-    run.git.publishing=true;store.saveRun(run);
-    const job=(options.publishPr??publishDraftPr)(run,config,body.data);publishing.set(run.id,job);
     try{
-      const result=await job;const latest=store.getRun(run.id)!;latest.git={...latest.git!,prUrl:result.url,publishedCommit:result.commit,publishing:false};store.saveRun(latest);store.addEvent(run.id,null,'log',`Draft PR created: ${result.url}`);return result;
+      return await publish(run.id,body.data);
     }catch(error){return sendError(reply,409,errorMessage(error));}
-    finally{publishing.delete(run.id);const latest=store.getRun(run.id);if(latest?.git?.publishing){latest.git.publishing=false;store.saveRun(latest);}}
   });
 
   app.post<{ Params: { id: string } }>('/api/runs/:id/approve', async (request, reply) => {
@@ -481,8 +520,7 @@ export async function createApp(config: AppConfig, options: CreateAppOptions = {
       return sendError(reply, 409, `Cannot approve run in status "${run.status}"`);
     }
     try {
-      if(run.currentStep===run.steps.length-1) await engine.assertValidationCurrent(run.id);
-      return engine.approve(run.id, body.data.acknowledgedAssessment);
+      return await engine.approveCurrent(run.id, body.data.acknowledgedAssessment);
     } catch (error) {
       return sendError(reply, 409, errorMessage(error));
     }

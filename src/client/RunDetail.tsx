@@ -1,5 +1,7 @@
+import CouncilPanel from './CouncilPanel';
 import ValidationPanel from './ValidationPanel';
 import GitRunPanel from './GitRunPanel';
+import AutomationPanel from './AutomationPanel';
 import { uncertainAssessmentToken } from '../shared/review-assessment';
 import ReviewAdvice from './ReviewAdvice';
 import ToolCalls from './ToolCalls';
@@ -295,6 +297,7 @@ export default function RunDetail({ run, events, busy, onAction, onBack, onMessa
             {selectedStep?.history?.map((attempt, index) => <details key={index} className="previous-attempt">
               <summary>Previous attempt {attempt.attempt} ({attempt.status.replaceAll('_', ' ')})</summary>
               <ToolCalls calls={stepToolCalls({ ...selectedStep, ...attempt, toolCalls: attempt.toolCalls ?? [] }, events.filter(event => !attempt.finishedAt || event.timestamp <= attempt.finishedAt))} running={false} activeSince={null} />
+              {attempt.council && <CouncilPanel evidence={attempt.council} />}
               {attempt.validation && <ValidationPanel evidence={attempt.validation} />}
               {attempt.conversation?.length ? attempt.conversation.map(item => <div key={item.id}><strong>{item.role === 'user' ? 'You' : selectedStep.definition.name}</strong><AgentOutput text={item.content} /></div>) : <AgentOutput text={attempt.output || attempt.error || 'No output recorded.'} />}
             </details>)}
@@ -304,8 +307,9 @@ export default function RunDetail({ run, events, busy, onAction, onBack, onMessa
                 {selectedStep.error}
               </div>
             ) : null}
+            {selectedStep?.council && <CouncilPanel key={`${run.id}-${selectedStep.attempt}`} evidence={selectedStep.council} busy={busy} onChallenge={activeStep === run.currentStep && ['blocked','waiting_approval'].includes(run.status) ? question => onMessage(selectedStep.definition.id, question, crypto.randomUUID()) : undefined} />}
             {selectedStep?.validation && <ValidationPanel evidence={selectedStep.validation} />}
-            {selectedStep && <PlanningChat key={`${run.id}-${selectedStep.definition.id}`} run={run} step={selectedStep} events={events} current={activeStep === run.currentStep} busy={busy} onSend={onMessage} draftSuggestion={draftSuggestion?.stepId === selectedStep.definition.id ? draftSuggestion : null} />}
+            {selectedStep && !selectedStep.definition.council && <PlanningChat key={`${run.id}-${selectedStep.definition.id}`} run={run} step={selectedStep} events={events} current={activeStep === run.currentStep} busy={busy} onSend={onMessage} draftSuggestion={draftSuggestion?.stepId === selectedStep.definition.id ? draftSuggestion : null} />}
           </div>
         ) : null}
 
@@ -394,6 +398,7 @@ export default function RunDetail({ run, events, busy, onAction, onBack, onMessa
 
       {selectedStep && !selectedStep.definition.validation && run.steps.some(s=>s.validation) && <details className="validation-summary"><summary>Validation evidence and Jev signals</summary>{run.steps.filter(s=>s.validation).map(s=><ValidationPanel key={s.definition.id} evidence={s.validation!}/>)}</details>}
       {run.git && <GitRunPanel run={run} />}
+      <AutomationPanel run={run} />
       {selectedStep && <ReviewAdvice run={run} step={selectedStep} onDraft={text => { setDraftSuggestion({stepId:selectedStep.definition.id,text,nonce:Date.now()}); setTab('output'); }} />}
       {showFooter ? (
         <footer className="approval-bar">
@@ -402,7 +407,7 @@ export default function RunDetail({ run, events, busy, onAction, onBack, onMessa
             <button type="button" className="btn primary" disabled={busy || showRevision} onClick={() => { void onAction('rework').then(() => updateUrl({ step: null, tab: null })).catch(() => {}); }}>Send to implementer</button>
             <p className="approval-context">Sends these findings to {run.steps[repairTarget].definition.name}, then repeats validation and review. Existing approval gates stay in place.</p>
           </div>}
-          {isBlocked && <p className="approval-context">This step is blocked. Send revised instructions to continue.</p>}
+          {isBlocked && <p className="approval-context">{selectedStep?.definition.council ? 'Resolve council findings with a focused evidence request or send them to the implementer.' : 'This step is blocked. Send revised instructions to continue.'}</p>}
           {(isWaitingApproval || isBlocked) && activeStep !== run.currentStep && <button type="button" className="btn primary" onClick={() => { updateUrl({ step: null, tab: null }); }}>Review current step</button>}
           {isWaitingApproval && activeStep === run.currentStep && uncertaintyToken && <label className="uncertainty-acknowledgment"><input type="checkbox" checked={acknowledgedAssessment === uncertaintyToken} onChange={event => setAcknowledgedAssessment(event.target.checked ? uncertaintyToken : null)} /> I understand Jev is uncertain. I have reviewed the evidence and want to approve anyway.</label>}
           {isWaitingApproval && assessmentPending && <p className="approval-context">Waiting for Jev assessment before approval.</p>}
@@ -417,7 +422,7 @@ export default function RunDetail({ run, events, busy, onAction, onBack, onMessa
             </button>
           ) : null}
 
-          {(isWaitingApproval || isBlocked) && activeStep === run.currentStep && !currentPlanning ? (
+          {(isWaitingApproval || isBlocked) && activeStep === run.currentStep && !currentPlanning && !selectedStep?.definition.council ? (
             <button
               type="button"
               className="btn secondary"

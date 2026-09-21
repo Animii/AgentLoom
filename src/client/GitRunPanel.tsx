@@ -5,6 +5,7 @@ export default function GitRunPanel({run}:{run:Run}) {
  const [open,setOpen]=useState(false);const [preview,setPreview]=useState<GitPreview|null>(null);const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [title,setTitle]=useState(run.title);const [body,setBody]=useState('');const [url,setUrl]=useState(run.git?.prUrl??'');
  async function load(){setBusy(true);setError('');try{const response=await fetch(`/api/runs/${run.id}/git`);const data=await response.json();if(!response.ok)throw Error(data.error??'Could not load diff');setPreview(data);setTitle(data.title);setBody(data.body);setUrl(data.prUrl??'');}catch(e){setError(e instanceof Error?e.message:'Could not load diff');}finally{setBusy(false);}}
  useEffect(()=>{if(open)void load();},[run.id,run.status,open]);
+ useEffect(()=>setUrl(run.git?.prUrl??''),[run.id,run.git?.prUrl]);
  if(!run.git)return null;
  async function publish(){if(!preview)return;setBusy(true);setError('');try{const response=await fetch(`/api/runs/${run.id}/pull-request`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:preview.token,title,body})});const data=await response.json();if(!response.ok)throw Error(data.error??'PR creation failed');setUrl(data.url);}catch(e){setError(e instanceof Error?e.message:'PR creation failed');}finally{setBusy(false);}}
  return <details className="git-run-panel" open={open} onToggle={event=>setOpen(event.currentTarget.open)}>

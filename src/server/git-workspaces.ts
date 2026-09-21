@@ -75,20 +75,27 @@ export async function publishDraftPr(run:Run,config:AppConfig,input:PublishInput
  const gh=transport?.gh??((args:string[],cwd:string)=>command('gh',args,cwd));
  const preview=await previewRunGit(run,config);
  if(!preview.canPublish)throw new Error(preview.reason);
+ if(!run.git?.approvedTree || preview.tree!==run.git.approvedTree)throw new Error('The current Git tree has not been approved. Revalidate and approve these files before publishing.');
  if(preview.token!==input.token)throw new Error('Files changed since the preview. Refresh the diff before publishing.');
  const cwd=run.workspace;const repository=run.git!.repository!;const branch=run.git!.branch;
  await gh(['auth','status','--hostname','github.com'],cwd);
- const existing=JSON.parse(await gh(['pr','list','--repo',repository,'--head',branch,'--state','all','--json','url'],cwd)) as {url:string}[];
- if(existing.length)return {url:validPrUrl(existing[0].url,repository),commit:preview.head};
+ const existing=JSON.parse(await gh(['pr','list','--repo',repository,'--head',branch,'--state','all','--json','url,headRefOid,state,baseRefName'],cwd)) as {url:string;headRefOid:string;state:string;baseRefName:string}[];
+ if(existing.length){
+  const pr=existing[0];
+  if(pr.state!=='OPEN'||pr.baseRefName!==run.git!.baseBranch||! /^[a-f0-9]{40}$/.test(pr.headRefOid))throw Error('An existing PR has a different state or base. Inspect it on GitHub before continuing.');
+  const remoteCommit=JSON.parse(await gh(['api',`repos/${repository}/git/commits/${pr.headRefOid}`],cwd)) as {tree?:{sha?:string}};
+  if(remoteCommit.tree?.sha!==run.git!.approvedTree)throw Error('The existing PR does not contain the approved Git tree.');
+  return {url:validPrUrl(pr.url,repository),commit:pr.headRefOid};
+ }
  let commit=preview.head;
- if((await git(cwd,['rev-parse','HEAD^{tree}'])).trim()!==preview.tree){
+ if((await git(cwd,['rev-parse',`${preview.head}^{tree}`])).trim()!==preview.tree){
   const user=JSON.parse(await gh(['api','user'],cwd)) as {login:string;id:number};
   if(!/^[a-zA-Z0-9-]+$/.test(user.login)||!Number.isSafeInteger(user.id))throw new Error('Invalid GitHub identity.');
   commit=(await git(cwd,['-c',`user.name=${user.login}`,'-c',`user.email=${user.id}+${user.login}@users.noreply.github.com`,'commit-tree',preview.tree,'-p',preview.head,'-m',input.title])).trim();
   await git(cwd,['update-ref',`refs/heads/${branch}`,commit,preview.head]);await git(cwd,['read-tree',preview.tree]);
  }
  // Only push this run's dedicated branch. No force push, merge, or default-branch update.
- const remote=`https://github.com/${repository}.git`, ref=`refs/heads/${branch}:refs/heads/${branch}`;
+ const remote=`https://github.com/${repository}.git`, ref=`${commit}:refs/heads/${branch}`;
  if(transport)await transport.push(cwd,remote,ref);else await git(cwd,['-c','credential.helper=','-c','credential.helper=!gh auth git-credential','push',remote,ref]);
  const folder=await mkdtemp(path.join(tmpdir(),'agentloom-pr-'));
  try{const bodyFile=path.join(folder,'body.md');await writeFile(bodyFile,input.body,'utf8');const output=await gh(['pr','create','--repo',repository,'--head',branch,'--base',run.git!.baseBranch,'--draft','--title',input.title,'--body-file',bodyFile],cwd);return {url:validPrUrl(output.trim(),repository),commit};}finally{await rm(folder,{recursive:true,force:true});}

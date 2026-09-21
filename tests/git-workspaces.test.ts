@@ -42,11 +42,36 @@ test('draft PR publishes only reviewed snapshot to run branch; stale previews an
  const f=await fixture();try{
  const run=await f.prepare('publish');await writeFile(path.join(run.workspace,'app.txt'),'first\n');const old=await previewRunGit(run,f.config);await writeFile(path.join(run.workspace,'app.txt'),'approved\n');
  let calls=0,pushes=0,created=false;const remote=path.join(f.root,'remote.git');await git(f.root,'init','--bare',remote);
- const transport={gh:async(args:string[])=>{calls++;if(args[0]==='auth')return '';if(args[1]==='list')return created?'[{"url":"https://github.com/fixture/project/pull/1"}]':'[]';if(args[0]==='api')return '{"login":"fixture","id":123}';assert.ok(args.includes('--draft'));assert.equal(args[args.indexOf('--base')+1],'main');assert.equal(await readFile(args[args.indexOf('--body-file')+1],'utf8'),'Checked\n\nTests passed.');created=true;return 'https://github.com/fixture/project/pull/1';},push:async(cwd:string,_url:string,ref:string)=>{pushes++;await git(cwd,'push',remote,ref);}};
- await assert.rejects(publishDraftPr(run,f.config,{token:old.token,title:'Fix',body:''},transport),/Files changed/);assert.equal(calls,0);
+ const transport={gh:async(args:string[])=>{
+  calls++;if(args[0]==='auth')return '';
+  if(args[1]==='list')return created?JSON.stringify([{url:'https://github.com/fixture/project/pull/1',headRefOid:await git(f.root,'--git-dir',remote,'rev-parse','refs/heads/agentloom/publish'),state:'OPEN',baseRefName:'main'}]):'[]';
+  if(args[0]==='api')return args[1]==='user'?'{"login":"fixture","id":123}':JSON.stringify({tree:{sha:run.git!.approvedTree}});
+  assert.ok(args.includes('--draft'));assert.equal(args[args.indexOf('--base')+1],'main');assert.equal(await readFile(args[args.indexOf('--body-file')+1],'utf8'),'Checked\n\nTests passed.');created=true;return 'https://github.com/fixture/project/pull/1';
+ },push:async(cwd:string,_url:string,ref:string)=>{
+  pushes++;
+  // Advance the local branch after the publisher creates its approved commit.
+  await writeFile(path.join(cwd,'app.txt'),'unreviewed concurrent edit\n');await git(cwd,'add','.');await git(cwd,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-m','Concurrent change');
+  await git(cwd,'push',remote,ref);
+ }};
+ run.git!.approvedTree=old.tree;
+ await assert.rejects(publishDraftPr(run,f.config,{token:old.token,title:'Fix',body:''},transport),/not been approved/);assert.equal(calls,0);
  const preview=await previewRunGit(run,f.config);const input={token:preview.token,title:'Fix',body:'Checked\n\nTests passed.'};
+ await assert.rejects(publishDraftPr(run,f.config,input,transport),/not been approved/);assert.equal(calls,0);
+ run.git!.approvedTree=preview.tree;
  await assert.rejects(publishDraftPr(run,f.config,input,{...transport,gh:async()=>{throw Error('auth failed');}}),/auth failed/);assert.equal(pushes,0);
  const result=await publishDraftPr(run,f.config,input,transport);assert.match(result.url,/pull\/1$/);assert.equal(await git(f.root,'--git-dir',remote,'show','refs/heads/agentloom/publish:app.txt'),'approved');assert.equal(await git(f.root,'--git-dir',remote,'for-each-ref','--format=%(refname)'),'refs/heads/agentloom/publish');assert.equal(await git(f.source,'status','--porcelain'),'');
- const retry=await previewRunGit(run,f.config);assert.equal((await publishDraftPr(run,f.config,{...input,token:retry.token},transport)).url,result.url);assert.equal(pushes,1);
+ await writeFile(path.join(run.workspace,'app.txt'),'approved\n');
+ const retry=await previewRunGit(run,f.config);const recovered=await publishDraftPr(run,f.config,{...input,token:retry.token},transport);assert.equal(recovered.url,result.url);assert.equal(recovered.commit,result.commit);assert.notEqual(recovered.commit,retry.head);assert.equal(pushes,1);
+ }finally{await f.close();}
+});
+
+test('committing approved edits during GitHub preflight cannot publish the older preview commit',async()=>{
+ const f=await fixture();try{
+  const run=await f.prepare('preflight');await writeFile(path.join(run.workspace,'app.txt'),'approved\n');const preview=await previewRunGit(run,f.config);run.git!.approvedTree=preview.tree;let pushes=0;
+  await assert.rejects(publishDraftPr(run,f.config,{token:preview.token,title:'Fix',body:''},{gh:async(args)=>{
+   if(args[0]==='auth'){await git(run.workspace,'add','.');await git(run.workspace,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-m','Approved edits committed concurrently');return '';}
+   if(args[1]==='list')return '[]';if(args[0]==='api')return '{"login":"fixture","id":123}';return 'https://github.com/fixture/project/pull/1';
+  },push:async()=>{pushes++;}}),/Git command failed/);
+  assert.equal(pushes,0);assert.equal(await git(run.workspace,'show','HEAD:app.txt'),'approved');
  }finally{await f.close();}
 });
