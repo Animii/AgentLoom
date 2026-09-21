@@ -38,7 +38,49 @@ test('BLOCKED output cannot be approved; explicit revision resolves it',async()=
 
 test('failure requires manual retry and retains event history',async()=>{let calls=0;const f=await fixture(async()=>{if(++calls===1)throw new Error('Provider offline');return {output:'Recovered',sessionId:null,costUsd:null};});try{f.workflow([definition('build')]);const r=await f.create();await f.wait(r.id,'failed');const before=f.store.getEvents(r.id).length;f.engine.retry(r.id);const done=await f.wait(r.id,'completed');assert.equal(done.steps[0].attempt,2);assert.ok(f.store.getEvents(r.id).length>before);assert.ok(f.store.getEvents(r.id).some(e=>e.message.includes('Provider offline')));}finally{await f.close();}});
 
-test('cancellation aborts owned work and late completion cannot revive run',async()=>{let aborted=false;const f=await fixture(async(_s,_p,_w,signal)=>{await new Promise<void>(resolve=>{signal.addEventListener('abort',()=>{aborted=true;resolve();},{once:true});});return {output:'late',sessionId:null,costUsd:null};});try{f.workflow([definition('build')]);const r=await f.create();await f.wait(r.id,'running');await delay(30);f.engine.cancel(r.id);await delay(40);assert.equal(f.store.getRun(r.id)?.status,'cancelled');assert.ok(aborted);}finally{await f.close();}});
+test('retry after shutdown retains partial files, transcript, tools and unknown attempt cost',{timeout:10000},async()=>{
+ let notifyStarted!:()=>void;const started=new Promise<void>(resolve=>{notifyStarted=resolve;});
+ const f=await fixture(async(_s,_p,workspace,signal,event)=>{
+  await writeFile(path.join(workspace,'partial.txt'),'keep this work');
+  event({type:'output',message:'Partial implementation before restart.'});
+  event({type:'tool',message:'Read project',toolCall:{id:'before-restart',name:'read',status:'completed',input:{path:'README.md'},startedAt:new Date().toISOString()}});
+  await new Promise<void>(resolve=>{signal.addEventListener('abort',()=>resolve(),{once:true});notifyStarted();});
+  return {output:'Late completion',sessionId:null,costUsd:9};
+ });
+ let restarted:Engine|undefined;
+ try{
+  f.workflow([definition('build')]);const run=await f.create();await started;await f.engine.shutdown();
+  const interrupted=f.store.getRun(run.id)!;assert.equal(interrupted.status,'interrupted');
+  const prior=interrupted.steps[0];assert.match(prior.output,/Partial implementation/);assert.equal(prior.costUsd,null);
+  restarted=new Engine(f.store,f.config,async(s,p,workspace,signal,event)=>{
+   assert.equal(await readFile(path.join(workspace,'partial.txt'),'utf8'),'keep this work');
+   return success(s,p,workspace,signal,event);
+  });
+  restarted.retry(run.id);const done=await f.wait(run.id,'completed'),step=done.steps[0];
+  assert.equal(step.attempt,2);assert.equal(step.costUsd,0.001);assert.equal(step.history?.length,1);
+  const saved=step.history![0];
+  for(const key of ['attempt','status','output','error','startedAt','finishedAt','costUsd','execution','toolCalls'] as const)assert.deepEqual(saved[key],prior[key]);
+  assert.equal(saved.costUsd,null);assert.deepEqual(step.toolCalls,[]);assert.equal(saved.toolCalls?.[0].name,'read');
+ }finally{await restarted?.shutdown();await f.close();}
+});
+
+test('cancellation aborts owned work and late completion cannot revive run',{timeout:10000},async()=>{
+ let aborted=false,notifyStarted!:()=>void;
+ const started=new Promise<void>(resolve=>{notifyStarted=resolve;});
+ const f=await fixture(async(_s,_p,_w,signal)=>{
+  await new Promise<void>(resolve=>{
+   signal.addEventListener('abort',()=>{aborted=true;resolve();},{once:true});
+   notifyStarted();
+  });
+  return {output:'late',sessionId:null,costUsd:null};
+ });
+ try{
+  f.workflow([definition('build')]);const r=await f.create();
+  // Running includes asynchronous evidence preparation; wait for the owned agent.
+  await started;f.engine.cancel(r.id);await delay(40);
+  assert.equal(f.store.getRun(r.id)?.status,'cancelled');assert.ok(aborted);
+ }finally{await f.close();}
+});
 
 test('demo uses no provider and clearly labels simulated output',async()=>{const f=await fixture(async()=>{throw new Error('Provider must not run');});try{f.workflow([definition('a'),definition('b')]);const r=await f.create('demo');const done=await f.wait(r.id,'completed');assert.match(done.steps[0].output,/Demo output/);assert.equal(done.steps[0].costUsd,null);}finally{await f.close();}});
 

@@ -111,3 +111,83 @@ The real private-GitHub delivery pilot is `e03415bc-3960-4b3a-a181-e3bf42746fb1`
 The pilot completed and automatically created draft PR [#1](https://github.com/Animii/AgentLoom/pull/1), targeting `feat/pr-machine`. All three final reports passed and the chair returned no blocking disputes. Jev selected completion at 0.70 confidence (0.80 completion probability). The run used one automatic repair, plus the documented manual recovery. GitHub confirms the PR is open and draft, with only `docs/PR_MACHINE.md` changed. Published commit `f2eb5f4a0746aff1f5cccad65f4045f14fd88193` has tree `19d0854b89ba7ae5ae38057d299f2bae21818eb4`, exactly matching the stored approved tree. The completed UI survives reload and 390px layout without page errors; full evidence is retained in the run and `artifacts/real-pr-machine-completed.json`.
 
 Frozen candidate `fb1e988` verification: `5e62a8de-632a-4c79-a174-dd6ac2aec6fa` on localhost:4317 is completed. Typecheck, 136 backend tests, production build and five browser scenarios pass. Fresh recorded Linux validation also passes all four commands. All three independent reviewers and the chair return PASS, with no blocking disputes; optional coverage/usability warnings remain visible. Prior blocked verification runs are retained rather than overwritten. Merging is never automated.
+
+## Single-review PR machine and five-task pilot - 2026-09-21
+
+Candidate `a32cf08` makes PR machine the new-run default: explicit plan approval,
+Flash at max effort, recorded commands and Jev signals, one structured Astra
+review, bounded routing and automatic draft delivery for eligible worktrees.
+Existing workflows retain their configuration. An optional Fable second opinion
+preserves the original report and requires evidence to resolve disagreements.
+Review clarifications survive later repairs; unresolved findings and current
+validation remain mandatory.
+
+Final typecheck and production build pass. The exact final source passed all
+144 backend tests in an isolated Linux container with the normal parallel test
+command (`artifacts/single-review/linux-delivery-tests.log`). An earlier Windows
+run also passed 144/144. A later concurrent Windows run had short-deadline process
+failures; it is retained as a failed run, not counted as passing evidence.
+The former Linux model-catalog close-stdin fixture was corrected without changing
+production timeouts or assertions and passed ten consecutive Linux catalog runs.
+
+The full browser suite passed 26/26. Subsequent targeted coverage passed for the
+single reviewer, council, automation, and the delayed-workflow response regression.
+One publication UI timeout during concurrent backend testing passed unchanged
+when run separately; its original trace remains under
+`artifacts/single-review/ui-status-first/`. Jev settings browser checks passed
+with a deterministic upstream fixture. Real Jev calls are separately recorded
+in the live pilot.
+
+Docker Compose was rebuilt and is healthy on localhost:4317. After the final
+restart, all 190 existing run IDs, statuses and current-step positions matched
+the saved pre-deployment states. The actual deployed UI selects the PR machine
+and renders the live pilot at desktop and 390px width without page errors.
+The delayed-loading fix preserves text entered before workflows arrive.
+The temporary browser-fixture server on port 4321 was stopped.
+
+See [five-task pilot results](PR_MACHINE_PILOT_RESULTS.md) for the real providers,
+frozen source, draft PRs, manual interventions, recovery proofs and partial cost
+accounting. Pilot runs use the separate localhost:4319 server and data volumes;
+merging remains manual.
+
+## Reliable evidence handoffs and bounded rescue - 2026-09-21
+
+Candidate `501933b` supplies immutable recorded evidence packets to implementers
+and reviewers, limits Jev to eligible actions, and supports one explicitly
+preapproved Fable rescue after two Flash repairs with independent Astra review.
+The live pilot exposed and prompted fixes for a timing-dependent cancellation
+test and missing ordinary interrupted-attempt history on retry.
+
+Typecheck and production build pass. All **150 backend tests pass** in an
+isolated Linux container with the normal parallel test command
+(`artifacts/reliable-delivery/history-backend-tests.log`). The new recovery
+regression verifies retained partial files, transcript, tools, timestamps,
+provider identity and unknown cost after shutdown, restart and retry.
+
+The full browser run passed 25/26 cases. The failed workspace-recovery case used
+an incorrect fixture workspace path; it passed unchanged when the test and
+server paths matched. Both logs and the original trace are retained. The compact
+rescue checkbox passed desktop/mobile visual checks. Jev key save, persistence,
+connection, all three evaluation types and removal passed with a deterministic
+upstream fixture. Real Jev routing is separately recorded in the live pilot.
+
+The final deployed browser checks pass for new-run defaults and the 16px rescue
+checkbox, the completed rescue and draft link, refresh-retained run selection,
+390px layout without horizontal overflow, and no page errors. They create no
+run or provider call (`artifacts/reliable-delivery/live-ui.json`).
+
+Docker Compose is healthy on localhost:4317 using image
+`sha256:e19486a5c095a224ae61d6db5f48812c56a924f9821574abcaf1de37e05d7f11`.
+All 190 existing run identities, statuses, current-step positions, automation
+states and PR links matched before and after deployment. Separate pilot data,
+old results and other research files were preserved.
+
+The [five new live deliveries](RELIABLE_DELIVERY_RESULTS.md) all have passing
+recorded focused tests, typecheck, the frozen 149-test baseline, build, Compose
+receipts and independent Astra reviews. Remote trees and exact three-file scope
+were verified before this feature PR. There was one unplanned operator approval
+and two planned recovery actions; zero unplanned interventions was not achieved.
+The frozen pilot keeps its original failures. The interrupted attempt omitted
+by its old runtime is retained as a supplemental operator-snapshot record rather
+than silently rewriting the live run. Flash, Fable and unknown costs are reported
+separately in the versioned evidence.

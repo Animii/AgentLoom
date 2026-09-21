@@ -404,7 +404,7 @@ label { font-size:13px; font-weight:500; }
 .council-panel { border:1px solid var(--border,#dce2e6); border-radius:14px; padding:24px; margin:16px 0; overflow-wrap:anywhere; }
 .council-heading { display:flex; align-items:baseline; justify-content:space-between; gap:16px; flex-wrap:wrap; }
 .council-heading h3 { margin:0; }
-.council-members { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:20px 0; align-items:start; }
+.council-members { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr)); gap:12px; margin:20px 0; align-items:start; }
 .council-members > details { border:1px solid var(--border,#dce2e6); border-radius:10px; padding:14px; min-width:0; }
 .council-members summary span { display:block; margin-top:6px; font-size:.85rem; }
 .council-panel details { margin-block:12px; }

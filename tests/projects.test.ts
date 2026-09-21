@@ -18,7 +18,7 @@ test('connected projects use original folders, isolated copies, persistent setti
   assert.equal((await app.inject({url:'/api/project-folders'})).json().folders[0].name,'Game');
   const connected=await post('/api/projects',{name:'My Game',folder:'Game',workspaceMode:'direct'});assert.equal(connected.statusCode,201);const project=connected.json();
   assert.equal((await post('/api/runs',{title:'Stale mode',task:'No write',project:project.id,workflowId:'quick-review',mode:'live',expectedWorkspaceMode:'isolated'})).statusCode,409);
-  const workflow=app.store.listWorkflows()[0];app.store.saveWorkflow({...workflow,id:'edit',steps:[{...workflow.steps[2],id:'edit',approval:true,planning:false}]});
+  const workflow=app.store.listWorkflows().find(w=>w.id==='review-build')!;app.store.saveWorkflow({...workflow,id:'edit',steps:[{...workflow.steps.find(s=>s.id==='build')!,id:'edit',approval:true,planning:false}]});
   let created=await post('/api/runs',{title:'Direct edit',task:'Change source',project:project.id,workflowId:'edit',mode:'live'});assert.equal(created.statusCode,201);let run=created.json<Run>();await wait(run.id,'waiting_approval');assert.equal(await readFile(path.join(source,'source.txt'),'utf8'),'changed');assert.equal(app.store.getRun(run.id)?.workspace,source);
   assert.equal((await post('/api/runs',{title:'Conflicting edit',task:'Change source',project:project.id,workflowId:'edit',mode:'live'})).statusCode,409);
   assert.equal((await patch(project.id,{status:'archived'})).statusCode,409);

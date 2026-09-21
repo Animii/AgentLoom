@@ -1,0 +1,3568 @@
+{
+  "generatedAt": "2026-09-21T17:17:28.526Z",
+  "results": [
+    {
+      "task": 1,
+      "id": "2663e09e-29e4-4957-ab3d-904efea7bbb0",
+      "title": "[P1] Add a platform health CLI",
+      "status": "completed",
+      "url": "http://127.0.0.1:4319/?run=2663e09e-29e4-4957-ab3d-904efea7bbb0",
+      "brief": "Product-owner specification for a real AgentLoom developer tool. Use only Node built-ins, no new dependencies. Add the specified script, native node:test test file and dedicated documentation file; no other tracked files may change. No changes to package.json, existing tests, workflows or application source. Shell execution must use execFile/spawn with shell:false and fixed argument arrays. Do not commit, push, create PRs or merge: the platform owns publication. npm ci --include=dev is authorized in the run workspace. Run the task tests, npm run typecheck, npm test and npm run build. You may read existing application types/routes to confirm response shapes. The task below resolves all product choices; preserve its AC IDs in a concise plan and end PLAN_READY. Optional improvements do not expand scope. Merging remains manual.\n\nAC1: Add scripts/check-platform.mjs exporting async checkPlatform(baseUrl, {timeoutMs=3000}={}) and a direct CLI: node scripts/check-platform.mjs [--url URL] [--timeout-ms MS]. Defaults http://127.0.0.1:4317 and 3000. Only HTTP(S) origin URLs without credentials, query, fragment or non-root path; timeout a decimal integer 1..60000. Unknown/missing/repeated flags are usage errors. GET /api/health, no redirects, AbortSignal timeout. Healthy requires HTTP 200 and JSON {ok:true} (extra fields allowed), matching the existing app route. Return {ok:true} or {ok:false,error:string}; no response body/credentials in errors.\nAC2: CLI prints one JSON object on stdout, exit 0 healthy, 1 network/HTTP/JSON/unhealthy/timeout, 2 invalid arguments; usage errors use stderr only. Import has no side effects. Export validates arguments too, rejecting invalid input with TypeError before network.\nAC3: Add tests/check-platform-cli.test.mjs using local HTTP servers for success, wrong status/shape, malformed JSON, connection failure, timeout and redirect rejection; exercise actual CLI success/failure/usage and side-effect-free import. Docs docs/tools/check-platform.md cover commands, exit codes and limits. Only these three files change.",
+      "approvedPlan": "The specification is complete. Implementation awaits explicit approval through the platform.\n\n- **SCOPE:** Add only `scripts/check-platform.mjs`, `tests/check-platform-cli.test.mjs`, and `docs/tools/check-platform.md`. Use Node built-ins; add no dependencies. Preserve all other tracked files, including package files, existing tests, workflows and application source. Subprocess execution must use `execFile`/`spawn`, `shell:false`, and fixed argument arrays. Stay on the assigned branch; do not commit, push, create PRs or merge.\n\n- **AC1:** Export async `checkPlatform(baseUrl, {timeoutMs=3000}={})` and provide `node scripts/check-platform.mjs [--url URL] [--timeout-ms MS]`. CLI defaults are `http://127.0.0.1:4317` and `3000`. Accept only HTTP(S) origin URLs without credentials, query, fragment or non-root paths; timeout must be a decimal integer from 1 through 60000. Unknown, missing-value and repeated flags are usage errors. Send `GET /api/health`, reject redirects and use an AbortSignal timeout. Success requires HTTP 200 and JSON `{ok:true}`, allowing extra fields, matching the existing route. Return `{ok:true}` or `{ok:false,error:string}` without response bodies or credentials in errors.\n\n- **AC2:** Operational CLI results print exactly one JSON object to stdout. Exit 0 for healthy; exit 1 for network, HTTP, JSON, unhealthy, timeout or redirect failure. Invalid arguments use stderr only and exit 2. Import has no side effects. Exported API validation rejects invalid inputs with `TypeError` before network activity.\n\n- **AC3:** Add native `node:test` tests using local HTTP servers for success, wrong status/shape, malformed JSON, connection failure, timeout and redirect rejection. Exercise actual CLI success, failure and usage errors; verify streams, exit codes, defaults, URL restrictions, timeout boundaries, unknown/missing/repeated flags, API validation before networking, sanitized errors and side-effect-free import. Verify redirects never contact their target. Document commands, defaults, exit codes and limits in the dedicated documentation file.\n\nAfter approval, run `npm ci --include=dev` if needed, then the four configured recorded commands:\n\n```text\nnode --test tests/check-platform-cli.test.mjs\nnpm run typecheck\nnpm test\nnpm run build\n```\n\nDocker Compose integration is performed centrally on the healthy candidate platform at external port **4319**, internal port **4317**. This satisfies the repository Compose requirement for these standalone CLI changes. Do not build, start or change any Docker stack in this run.\n\nFinal review must account for **SCOPE, AC1, AC2 and AC3**, recorded validation evidence, and tracked changes against `550761e1d43c2c4b2a49dd6ca4d8d74ff421cddc`, including untracked files in review. The platform owns publication; merging remains manual.",
+      "createdAt": "2026-09-21T16:02:03.893Z",
+      "updatedAt": "2026-09-21T16:49:56.832Z",
+      "elapsedMs": 2872939,
+      "approvedElapsedMs": 2648975,
+      "automation": {
+        "version": 1,
+        "publication": "draft",
+        "status": "done",
+        "repairsUsed": 1,
+        "maxRepairs": 2,
+        "message": "Draft PR ready. Merge remains manual.",
+        "decisions": [
+          {
+            "at": "2026-09-21T16:13:34.904Z",
+            "inputHash": "9a920108ca8abd5c89e784365161b9db8c4ce8c1b289f14fb9d64605cbbf7764",
+            "choice": "return_to_implementer",
+            "confidence": 0.48,
+            "model": "jev-1.13.0",
+            "probabilities": {
+              "return_to_implementer": 0.65,
+              "request_clarification": 0.35,
+              "complete": 0
+            },
+            "action": "paused",
+            "reason": "Low routing confidence; review the evidence."
+          },
+          {
+            "at": "2026-09-21T16:19:55.138Z",
+            "inputHash": "a7a1e784a1a7a48b00cf41022698b6d88291b20c7975aa8379b9ec589e0c3d68",
+            "choice": "return_to_implementer",
+            "confidence": 0.83,
+            "model": "jev-1.13.0",
+            "probabilities": {
+              "return_to_implementer": 0.89,
+              "request_clarification": 0.11,
+              "complete": 0
+            },
+            "action": "repair",
+            "reason": "Returning concrete findings within the approved scope.",
+            "appliedAt": "2026-09-21T16:19:55.165Z"
+          },
+          {
+            "at": "2026-09-21T16:31:26.839Z",
+            "inputHash": "f413d3300cbc89d95c40ef3c1cd312cbbd212fcf13282d2e362e1183954d6c2b",
+            "choice": "return_to_implementer",
+            "confidence": 0.65,
+            "model": "jev-1.13.0",
+            "probabilities": {
+              "return_to_implementer": 0.77,
+              "request_clarification": 0.13,
+              "complete": 0.1
+            },
+            "action": "paused",
+            "reason": "Clarification, missing evidence, or repair limit requires your attention."
+          },
+          {
+            "at": "2026-09-21T16:38:09.883Z",
+            "inputHash": "955a7e7d3a37b8da697539477cdc4f211327cebbe449c908c9c080cb9df45db4",
+            "choice": "request_clarification",
+            "confidence": 0.79,
+            "model": "jev-1.13.0",
+            "probabilities": {
+              "return_to_implementer": 0.12,
+              "request_clarification": 0.86,
+              "complete": 0.02
+            },
+            "action": "paused",
+            "reason": "Clarification, missing evidence, or repair limit requires your attention."
+          },
+          {
+            "at": "2026-09-21T16:49:49.559Z",
+            "inputHash": "5c709bafcde9b3543a96bafa91c175720847281a5dc5d99b52fe2da49add3f56",
+            "choice": "complete",
+            "confidence": 0.76,
+            "model": "jev-1.13.0",
+            "probabilities": {
+              "return_to_implementer": 0.05,
+              "request_clarification": 0.11,
+              "complete": 0.84
+            },
+            "action": "complete",
+            "reason": "Evidence supports completion, subject to source freshness checks.",
+            "appliedAt": "2026-09-21T16:49:49.924Z"
+          }
+        ],
+        "approvedAt": "2026-09-21T16:05:47.857Z",
+        "contractHash": "ba1aa48ce7177a4cdd9c64dd0ee71a8f4ed3233c6e0fee5837a7e8b3a8bf3ec8"
+      },
+      "git": {
+        "branch": "agentloom/2663e09e-29e4-4957-ab3d-904efea7bbb0",
+        "baseBranch": "feat/single-reviewer-pr-machine",
+        "baseCommit": "550761e1d43c2c4b2a49dd6ca4d8d74ff421cddc",
+        "repository": "Animii/AgentLoom",
+        "approvedTree": "e8c981486395e4224be166d39929163009c0d188",
+        "publishing": false,
+        "prUrl": "https://github.com/Animii/AgentLoom/pull/5",
+        "publishedCommit": "07fcf8448c5b32969b4a49499445202d318c315a"
+      },
+      "validation": [
+        {
+          "attempt": 1,
+          "status": "passed",
+          "sourceUnchanged": true,
+          "signals": {
+            "status": "ready",
+            "model": "jev-1.13.0",
+            "claimsSupported": 0.68,
+            "scopeDrift": 0.22,
+            "needsHuman": 0.19
+          },
+          "commands": [
+            {
+              "executable": "node",
+              "args": [
+                "--test",
+                "tests/check-platform-cli.test.mjs"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 1202
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "typecheck"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 3473
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "test"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": true,
+              "durationMs": 58777
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "build"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 2820
+            }
+          ]
+        },
+        {
+          "attempt": 2,
+          "status": "passed",
+          "sourceUnchanged": true,
+          "signals": {
+            "status": "ready",
+            "model": "jev-1.13.0",
+            "claimsSupported": 0.57,
+            "scopeDrift": 0.25,
+            "needsHuman": 0.19
+          },
+          "commands": [
+            {
+              "executable": "node",
+              "args": [
+                "--test",
+                "tests/check-platform-cli.test.mjs"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 1805
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "typecheck"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 6983
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "test"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": true,
+              "durationMs": 86034
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "build"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 3890
+            }
+          ]
+        },
+        {
+          "attempt": 3,
+          "status": "passed",
+          "sourceUnchanged": true,
+          "signals": {
+            "status": "ready",
+            "model": "jev-1.13.0",
+            "claimsSupported": 0.51,
+            "scopeDrift": 0.32,
+            "needsHuman": 0.17
+          },
+          "commands": [
+            {
+              "executable": "node",
+              "args": [
+                "--test",
+                "tests/check-platform-cli.test.mjs"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 1625
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "typecheck"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 4740
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "test"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": true,
+              "durationMs": 60290
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "build"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 2743
+            }
+          ]
+        },
+        {
+          "attempt": 4,
+          "status": "passed",
+          "sourceUnchanged": true,
+          "signals": {
+            "status": "ready",
+            "model": "jev-1.13.0",
+            "claimsSupported": 0.5,
+            "scopeDrift": 0.34,
+            "needsHuman": 0.22
+          },
+          "commands": [
+            {
+              "executable": "node",
+              "args": [
+                "--test",
+                "tests/check-platform-cli.test.mjs"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 1741
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "typecheck"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 5125
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "test"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": true,
+              "durationMs": 68736
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "build"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 2747
+            }
+          ]
+        }
+      ],
+      "reviews": [
+        {
+          "attempt": 2,
+          "status": "blocked",
+          "source": "a5cbe668228aad8ffe8c8e3ce3cad56a89e0cb91688f16be18da02fbb2e3a661",
+          "bundleHash": "7ed3ef9a779eb1db0710b77d47b6de6a31935cdc5097633bc5e8cd3df9bfbdd2",
+          "changes": {
+            "baseline": "8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972",
+            "added": [
+              "docs/tools/check-platform.md",
+              "scripts/check-platform.mjs",
+              "tests/check-platform-cli.test.mjs"
+            ],
+            "modified": [],
+            "deleted": []
+          },
+          "reviewClarifications": [],
+          "reviewers": [
+            {
+              "provider": "codex",
+              "model": "gpt-6-astra",
+              "status": "completed",
+              "verdict": "BLOCKED",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "unmet",
+                  "evidence": [
+                    "scripts/check-platform.mjs:60 implements the exported health check, timeout, manual redirects and response validation; src/server/app.ts:398 confirms the existing health response shape.",
+                    "scripts/check-platform.mjs:30 accepts URLs with empty query or fragment components; focused API and CLI probes confirmed network requests.",
+                    "scripts/check-platform.mjs:119 echoes unknown arguments containing credentials."
+                  ]
+                },
+                {
+                  "id": "AC2",
+                  "status": "unmet",
+                  "evidence": [
+                    "Focused CLI probes against a local healthy server with URLs ending in '?' and '#' exited 0 and made one request each, instead of rejecting invalid arguments.",
+                    "Focused API probes with the same URLs called fetch and returned {\"ok\":true}, instead of rejecting with TypeError before networking.",
+                    "tests/check-platform-cli.test.mjs:203 and :301 cover ordinary CLI output and side-effect-free import; both passed."
+                  ]
+                },
+                {
+                  "id": "AC3",
+                  "status": "met",
+                  "evidence": [
+                    "tests/check-platform-cli.test.mjs:46 covers success, status/shape failures, malformed JSON, connection failure, timeout and redirect rejection using local servers.",
+                    "tests/check-platform-cli.test.mjs:137 covers validation, timeout boundaries and defaults; :203 covers actual CLI behavior.",
+                    "docs/tools/check-platform.md:5 documents commands, defaults, exit codes and limits.",
+                    "Independent command TMPDIR=\"$PWD\" node --test tests/check-platform-cli.test.mjs: 15 passed, zero failed or skipped.",
+                    "Recorded validation: npm run typecheck passed; npm test passed 143 tests; npm run build succeeded."
+                  ]
+                },
+                {
+                  "id": "SCOPE",
+                  "status": "unknown",
+                  "evidence": [
+                    "Frozen change manifest lists only the three authorized additions, with no modified or deleted files.",
+                    "Inspected additions use Node built-ins; test subprocesses use execFile argument arrays with its default shell:false behavior.",
+                    "The assigned source copy has no Git metadata, so the baseline comparison could not be independently repeated.",
+                    "The approved plan assigns Docker Compose validation centrally, but the supplied evidence contains no result for that validation."
+                  ]
+                }
+              ],
+              "findings": [
+                {
+                  "id": "F1",
+                  "criterion": "AC1",
+                  "severity": "blocker",
+                  "summary": "URLs containing empty query or fragment components bypass origin-only validation and reach the network.",
+                  "evidence": [
+                    "scripts/check-platform.mjs:30 checks URL.search and URL.hash against empty strings, which does not distinguish absent components from explicit empty '?' or '#'.",
+                    "API probe: checkPlatform('http://127.0.0.1:4317?') and the corresponding '#' URL each invoked a fetch stub and returned {\"ok\":true}.",
+                    "Actual CLI probe against a local healthy server: --url ending in '?' or '#' made one HTTP request, printed {\"ok\":true}, and exited 0. AC2 requires invalid inputs to fail before networking and CLI usage errors to exit 2."
+                  ]
+                },
+                {
+                  "id": "F2",
+                  "criterion": "AC1",
+                  "severity": "blocker",
+                  "summary": "Unknown-argument errors expose credentials verbatim on stderr.",
+                  "evidence": [
+                    "scripts/check-platform.mjs:119 interpolates the complete unknown argument into an error; :140 writes it to stderr.",
+                    "Actual CLI probe with --url=http://alice:sample-password@127.0.0.1:4317 exited 2 and printed the complete credential-bearing argument, including sample-password.",
+                    "A positional http://alice:sample-password@127.0.0.1:4317 argument produced the same disclosure, violating the requirement that errors contain no credentials."
+                  ]
+                }
+              ],
+              "resolutions": [],
+              "costUsd": null
+            }
+          ],
+          "challenge": {
+            "question": "Product-owner evidence clarification for SCOPE only. Central Compose validation is complete for candidate 550761e1d43c2c4b2a49dd6ca4d8d74ff421cddc: docker compose -f scripts/pilots/compose.yaml up -d --wait reported Healthy. Current docker inspect reports image sha256:b042349d88f5f2ab6a6b18fff4c9412052c5e9f4086dafe2c2d828ae2d678893 and health healthy. I just executed node /workspaces/runs/2663e09e-29e4-4957-ab3d-904efea7bbb0/scripts/check-platform.mjs --url http://127.0.0.1:4317 inside that container: exit 0, stdout {\"ok\":true}. The main Compose app on 4317 is also healthy. This is measured operator evidence, not an implementer claim.\nThe platform intentionally supplies source copies without Git metadata; use its frozen baseline/change manifest to check allowed files, together with source inspection. Requiring .git in that snapshot is not an approved requirement. Reassess SCOPE using this evidence. Retain F1 and F2 until code and regression tests actually resolve them; this clarification is no waiver of either defect and no approval to complete.",
+            "reviewers": [
+              {
+                "provider": "codex",
+                "model": "gpt-6-astra",
+                "status": "completed",
+                "verdict": "BLOCKED",
+                "criteria": [
+                  {
+                    "id": "AC1",
+                    "status": "unmet",
+                    "evidence": [
+                      "scripts/check-platform.mjs:60 implements GET /api/health, manual redirects, AbortSignal timeout and health-response validation; src/server/app.ts:398 confirms the application response shape.",
+                      "scripts/check-platform.mjs:30 accepts explicit empty query and fragment components, reproduced against a local HTTP server.",
+                      "scripts/check-platform.mjs:119 includes credential-bearing unknown arguments in errors."
+                    ]
+                  },
+                  {
+                    "id": "AC2",
+                    "status": "unmet",
+                    "evidence": [
+                      "Independent API probes with URLs ending in '?' and '#' each returned {\"ok\":true} and made one HTTP request instead of rejecting with TypeError before networking.",
+                      "Independent actual CLI probes with those URLs each exited 0, printed {\"ok\":true} and made one HTTP request instead of exiting 2.",
+                      "tests/check-platform-cli.test.mjs:203 and :301 verify ordinary CLI output and side-effect-free import; both tests passed."
+                    ]
+                  },
+                  {
+                    "id": "AC3",
+                    "status": "met",
+                    "evidence": [
+                      "tests/check-platform-cli.test.mjs:46 covers local-server success, status/shape failures, malformed JSON, connection failure, timeout and redirect rejection with zero target requests.",
+                      "tests/check-platform-cli.test.mjs:137 covers API validation, timeout boundaries and defaults; :203 covers actual CLI behavior.",
+                      "docs/tools/check-platform.md:5 documents commands, defaults, exit codes and limits.",
+                      "Independent command TMPDIR=\"$PWD\" node --test tests/check-platform-cli.test.mjs: 15 passed, zero failed or skipped.",
+                      "Recorded validation: npm run typecheck passed; npm test passed 143 tests; npm run build succeeded."
+                    ]
+                  },
+                  {
+                    "id": "SCOPE",
+                    "status": "met",
+                    "evidence": [
+                      "Frozen baseline/change manifest lists only scripts/check-platform.mjs, tests/check-platform-cli.test.mjs and docs/tools/check-platform.md as additions, with no modified or deleted files.",
+                      "Inspected additions use Node built-ins; tests/check-platform-cli.test.mjs:39, :288 and :304 use execFile with argument arrays and default shell:false behavior.",
+                      "Product-owner operator evidence reports docker compose -f scripts/pilots/compose.yaml up -d --wait Healthy for candidate 550761e1d43c2c4b2a49dd6ca4d8d74ff421cddc, with current inspected container health healthy.",
+                      "Operator execution of the tool inside that container against http://127.0.0.1:4317 exited 0 with stdout {\"ok\":true}. The frozen manifest is accepted for the intentionally Git-free source copy."
+                    ]
+                  }
+                ],
+                "findings": [
+                  {
+                    "id": "F1",
+                    "criterion": "AC1",
+                    "severity": "blocker",
+                    "summary": "URLs containing empty query or fragment components bypass origin-only validation and reach the network.",
+                    "evidence": [
+                      "scripts/check-platform.mjs:30 checks URL.search and URL.hash against empty strings, which cannot distinguish absent components from explicit empty '?' or '#'.",
+                      "Current independent local-server probes: checkPlatform(origin + '?') and checkPlatform(origin + '#') each returned {\"ok\":true} and generated one HTTP request.",
+                      "Current actual CLI probes with the same suffixes each generated one request, printed {\"ok\":true}, and exited 0 rather than usage-error exit 2.",
+                      "tests/check-platform-cli.test.mjs:145 and :256 cover populated query/fragment components but omit these regression cases."
+                    ]
+                  },
+                  {
+                    "id": "F2",
+                    "criterion": "AC1",
+                    "severity": "blocker",
+                    "summary": "Unknown-argument errors expose credentials verbatim on stderr.",
+                    "evidence": [
+                      "scripts/check-platform.mjs:119 interpolates the complete unknown argument; :140 writes the message to stderr.",
+                      "Current actual CLI probe with --url=http://alice:sample-password@127.0.0.1:4317 exited 2 and printed the complete credential-bearing argument, including sample-password.",
+                      "A positional http://alice:sample-password@127.0.0.1:4317 argument reproduced the same disclosure.",
+                      "tests/check-platform-cli.test.mjs:239 does not assert credential sanitization for unknown arguments."
+                    ]
+                  }
+                ],
+                "resolutions": [],
+                "costUsd": null
+              }
+            ],
+            "chair": null
+          },
+          "chair": null
+        },
+        {
+          "attempt": 3,
+          "status": "pass",
+          "source": "1635e30f1e0d3f4b47f94800a1d5977fc7e4e6342eeeaf004b013437bbd1d3e2",
+          "bundleHash": "f3bd278833727e96cde49efa66dca4f2cb526aac393f182c05d26df19cdd6ef3",
+          "changes": {
+            "baseline": "8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972",
+            "added": [
+              "docs/tools/check-platform.md",
+              "scripts/check-platform.mjs",
+              "tests/check-platform-cli.test.mjs"
+            ],
+            "modified": [],
+            "deleted": []
+          },
+          "reviewClarifications": [],
+          "reviewers": [
+            {
+              "provider": "codex",
+              "model": "gpt-6-astra",
+              "status": "completed",
+              "verdict": "PASS",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "met",
+                  "evidence": [
+                    "scripts/check-platform.mjs:14 validates origin URLs; :39 and :102 validate timeout values; :120 rejects invalid flags.",
+                    "scripts/check-platform.mjs:60 implements GET /api/health, manual redirects, AbortSignal timeout and HTTP 200/{ok:true} validation.",
+                    "src/server/app.ts:398 confirms the existing health response shape.",
+                    "Independent API and CLI probes rejected ?, #, /? and /# before networking and confirmed credential-safe argument errors."
+                  ]
+                },
+                {
+                  "id": "AC2",
+                  "status": "met",
+                  "evidence": [
+                    "scripts/check-platform.mjs:150 implements stderr-only usage failures and JSON operational results with the required exit codes; :175 guards direct execution.",
+                    "Independent CLI probes for HTTP 503, malformed JSON, redirects, stalled headers and stalled bodies each produced one JSON object, empty stderr and exit 1.",
+                    "node --test tests/check-platform-cli.test.mjs: 16 passed, including healthy CLI, usage errors, API validation and side-effect-free import."
+                  ]
+                },
+                {
+                  "id": "AC3",
+                  "status": "met",
+                  "evidence": [
+                    "tests/check-platform-cli.test.mjs:46 onwards covers required local-server scenarios, redirect target isolation, validation, defaults and actual CLI behavior.",
+                    "docs/tools/check-platform.md:5 documents commands, defaults, exit codes and limits.",
+                    "Independent standalone test execution: 16 passed, zero failures or skips.",
+                    "Recorded validation attempt 2: typecheck passed, npm test reported 143 passing tests, and build succeeded."
+                  ]
+                },
+                {
+                  "id": "SCOPE",
+                  "status": "met",
+                  "evidence": [
+                    "Frozen changes manifest lists only the three permitted additions, with no modified or deleted files.",
+                    "The added implementation and tests use Node built-ins; subprocesses use execFile argument arrays with its default shell:false behavior.",
+                    "Supplied repair feedback records SCOPE as met with operator evidence; the approved plan assigns Compose validation centrally.",
+                    "Review was confined to the assigned source copy; source files were preserved."
+                  ]
+                }
+              ],
+              "findings": [
+                {
+                  "id": "F3",
+                  "criterion": "AC3",
+                  "severity": "warning",
+                  "summary": "Two documentation statements overstate the implementation: safe unknown flags are echoed, and malformed or unhealthy HTTP 200 bodies are read.",
+                  "evidence": [
+                    "docs/tools/check-platform.md:26 says unknown argument text is never echoed, but scripts/check-platform.mjs:113 echoes flag-shaped arguments such as --bogus.",
+                    "docs/tools/check-platform.md:33 says no response body is read on failure, but scripts/check-platform.mjs:86 reads bodies before JSON and health-shape failures."
+                  ]
+                }
+              ],
+              "resolutions": [
+                {
+                  "findingId": "F1",
+                  "evidence": "scripts/check-platform.mjs:33 now compares the serialized URL with its origin plus root slash. Independent local-server probes for ?, #, /? and /# all produced API TypeError and CLI exit 2 with empty stdout; total HTTP requests remained zero. Regression coverage exists at tests/check-platform-cli.test.mjs:145 and :261."
+                },
+                {
+                  "findingId": "F2",
+                  "evidence": "scripts/check-platform.mjs:113 now suppresses arbitrary unknown argument text. Independent CLI probes using credential-bearing --url=, positional, --url value and --bogus= forms all exited 2 with empty stdout and neither username nor password in stderr. The regression test at tests/check-platform-cli.test.mjs:284 passes."
+                }
+              ],
+              "costUsd": null
+            }
+          ],
+          "challenge": null,
+          "chair": null
+        },
+        {
+          "attempt": 4,
+          "status": "needs_evidence",
+          "source": "39965389185f2858ec8434473f60d1f4f1f0e892d2904f65d92ad28c03fe8570",
+          "bundleHash": "bb5afd127e4adcafad5472ecfef067521e7a6df0ccc4a8a197ef3343111b87b9",
+          "changes": {
+            "baseline": "8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972",
+            "added": [
+              "docs/tools/check-platform.md",
+              "scripts/check-platform.mjs",
+              "tests/check-platform-cli.test.mjs"
+            ],
+            "modified": [],
+            "deleted": []
+          },
+          "reviewClarifications": [],
+          "reviewers": [
+            {
+              "provider": "codex",
+              "model": "gpt-6-astra",
+              "status": "completed",
+              "verdict": "NEEDS_EVIDENCE",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "met",
+                  "evidence": [
+                    "scripts/check-platform.mjs:14-110 implements argument validation, GET /api/health, manual redirects, AbortSignal timeout and sanitized results.",
+                    "src/server/app.ts:398 confirms the application returns {ok:true,version:VERSION}.",
+                    "Independent standalone test run: 16 passed, 0 failed."
+                  ]
+                },
+                {
+                  "id": "AC2",
+                  "status": "met",
+                  "evidence": [
+                    "scripts/check-platform.mjs:120-185 implements CLI parsing, output streams, exit codes and direct-execution detection.",
+                    "tests/check-platform-cli.test.mjs:137-340 verifies validation before networking, CLI behavior, credential sanitization and silent import.",
+                    "Independent CLI probes for HTTP 503, malformed JSON, HTTP 307 and a stalled HTTP 200 body each returned one JSON object, empty stderr and exit 1; redirect target received zero requests."
+                  ]
+                },
+                {
+                  "id": "AC3",
+                  "status": "met",
+                  "evidence": [
+                    "tests/check-platform-cli.test.mjs:46-340 covers the required server, API and CLI scenarios.",
+                    "docs/tools/check-platform.md:7-52 documents commands, defaults, exit codes, limits and tests; lines 26 and 33 contain the documentation corrections.",
+                    "Recorded validation attempt 3: standalone tests 16/16, typecheck exit 0, application tests 143/143 and build exit 0."
+                  ]
+                },
+                {
+                  "id": "SCOPE",
+                  "status": "unknown",
+                  "evidence": [
+                    "Frozen change manifest lists only the three authorized additions, with no modified or deleted files.",
+                    "The added implementation and tests use Node built-ins; test subprocesses use execFile with argument arrays and its default shell:false behavior.",
+                    "The approved plan assigns Docker Compose integration to central validation, but the supplied records contain only the four Node/npm commands and no Compose integration result."
+                  ]
+                }
+              ],
+              "findings": [
+                {
+                  "id": "F1",
+                  "criterion": "SCOPE",
+                  "severity": "warning",
+                  "summary": "Completion of the required central Docker Compose validation cannot be verified.",
+                  "evidence": [
+                    "Approved plan specifies central integration at external port 4319/internal port 4317.",
+                    "Recorded validation attempt 3 supplies no execution result for that integration check."
+                  ]
+                }
+              ],
+              "resolutions": [],
+              "costUsd": null
+            }
+          ],
+          "challenge": null,
+          "chair": null
+        },
+        {
+          "attempt": 5,
+          "status": "pass",
+          "source": "39965389185f2858ec8434473f60d1f4f1f0e892d2904f65d92ad28c03fe8570",
+          "bundleHash": "405b8beab9a9cf1885017f65494b6fe2ffd539b489c0ae40ebbfaa23c6f62726",
+          "changes": {
+            "baseline": "8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972",
+            "added": [
+              "docs/tools/check-platform.md",
+              "scripts/check-platform.mjs",
+              "tests/check-platform-cli.test.mjs"
+            ],
+            "modified": [],
+            "deleted": []
+          },
+          "reviewClarifications": [
+            {
+              "attempt": 2,
+              "question": "Product-owner evidence clarification for SCOPE only. Central Compose validation is complete for candidate 550761e1d43c2c4b2a49dd6ca4d8d74ff421cddc: docker compose -f scripts/pilots/compose.yaml up -d --wait reported Healthy. Current docker inspect reports image sha256:b042349d88f5f2ab6a6b18fff4c9412052c5e9f4086dafe2c2d828ae2d678893 and health healthy. I just executed node /workspaces/runs/2663e09e-29e4-4957-ab3d-904efea7bbb0/scripts/check-platform.mjs --url http://127.0.0.1:4317 inside that container: exit 0, stdout {\"ok\":true}. The main Compose app on 4317 is also healthy. This is measured operator evidence, not an implementer claim.\nThe platform intentionally supplies source copies without Git metadata; use its frozen baseline/change manifest to check allowed files, together with source inspection. Requiring .git in that snapshot is not an approved requirement. Reassess SCOPE using this evidence. Retain F1 and F2 until code and regression tests actually resolve them; this clarification is no waiver of either defect and no approval to complete."
+            }
+          ],
+          "reviewers": [
+            {
+              "provider": "codex",
+              "model": "gpt-6-astra",
+              "status": "completed",
+              "verdict": "PASS",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "met",
+                  "evidence": [
+                    "scripts/check-platform.mjs:14 validates URL restrictions; :39 validates timeout bounds; :60 implements the exported API.",
+                    "scripts/check-platform.mjs:69 sends GET /api/health with manual redirects and AbortSignal.timeout; :78-99 enforces HTTP 200 and JSON ok:true.",
+                    "src/server/app.ts:398 confirms the application health response shape.",
+                    "Independent local-server probes passed for HTTP errors, malformed JSON, redirects, stalled headers and stalled bodies."
+                  ]
+                },
+                {
+                  "id": "AC2",
+                  "status": "met",
+                  "evidence": [
+                    "scripts/check-platform.mjs:120-172 implements usage handling, output streams and exit codes; :175-185 guards direct execution.",
+                    "tests/check-platform-cli.test.mjs:137 verifies TypeError before networking; :203-340 covers CLI streams, exit codes, credentials, defaults and import behavior.",
+                    "Independent CLI probes returned exit 1, exactly one JSON object and empty stderr for all five operational failure cases."
+                  ]
+                },
+                {
+                  "id": "AC3",
+                  "status": "met",
+                  "evidence": [
+                    "Independent command TMPDIR=\"$PWD\" node --test tests/check-platform-cli.test.mjs exited 0: 16 passed, 0 failed.",
+                    "tests/check-platform-cli.test.mjs:46-135 exercises the required local-server scenarios, including no redirect-target requests.",
+                    "docs/tools/check-platform.md:5-52 documents commands, defaults, exit codes, limits, API usage and tests."
+                  ]
+                },
+                {
+                  "id": "SCOPE",
+                  "status": "met",
+                  "evidence": [
+                    "Frozen change manifest against sourceBaseline 8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972 lists exactly the three permitted additions, with no modified or deleted files.",
+                    "The added script and tests use Node built-ins; test subprocesses use execFile with argument arrays and its default shell:false.",
+                    "Recorded validation attempt 4 reports exit 0 for standalone tests, npm run typecheck, npm test (143 passed), and npm run build; before/after source fingerprints match.",
+                    "Historical operator receipt records healthy central Compose validation and a successful CLI check. Application and Compose files remain unchanged; current CLI validation is independently supported by this review."
+                  ]
+                }
+              ],
+              "findings": [],
+              "resolutions": [
+                {
+                  "findingId": "F3",
+                  "evidence": "docs/tools/check-platform.md:26 now acknowledges echoed flag-shaped unknown arguments, matching scripts/check-platform.mjs:113-117 and passing credential-redaction tests. Documentation :33 now distinguishes HTTP 200 body reads from redirect/non-200 handling, matching implementation :78-94 and the independently passing stalled-body timeout probe."
+                }
+              ],
+              "costUsd": null
+            }
+          ],
+          "challenge": null,
+          "chair": null
+        }
+      ],
+      "costs": [
+        {
+          "stepId": "plan",
+          "attempt": 2,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:03:54.940Z",
+          "finishedAt": "2026-09-21T16:04:17.322Z",
+          "costUsd": null
+        },
+        {
+          "stepId": "build",
+          "attempt": 1,
+          "provider": "opencode",
+          "model": "deepseek/deepseek-flash",
+          "effort": "max",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:05:47.884Z",
+          "finishedAt": "2026-09-21T16:10:52.020Z",
+          "costUsd": 0.030602159999999996
+        },
+        {
+          "stepId": "build",
+          "attempt": 2,
+          "provider": "opencode",
+          "model": "deepseek/deepseek-flash",
+          "effort": "max",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:25:30.437Z",
+          "finishedAt": "2026-09-21T16:28:04.661Z",
+          "costUsd": 0.012349817999999999
+        },
+        {
+          "stepId": "build",
+          "attempt": 3,
+          "provider": "opencode",
+          "model": "deepseek/deepseek-flash",
+          "effort": "max",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:33:33.650Z",
+          "finishedAt": "2026-09-21T16:35:23.010Z",
+          "costUsd": 0.008310576
+        },
+        {
+          "stepId": "review",
+          "attempt": 2,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "blocked",
+          "startedAt": "2026-09-21T16:18:47.837Z",
+          "finishedAt": "2026-09-21T16:19:53.433Z",
+          "costUsd": null
+        },
+        {
+          "stepId": "review",
+          "attempt": 3,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "waiting_approval",
+          "startedAt": "2026-09-21T16:29:44.978Z",
+          "finishedAt": "2026-09-21T16:31:27.145Z",
+          "costUsd": null
+        },
+        {
+          "stepId": "review",
+          "attempt": 4,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "blocked",
+          "startedAt": "2026-09-21T16:36:33.646Z",
+          "finishedAt": "2026-09-21T16:38:08.424Z",
+          "costUsd": null
+        },
+        {
+          "stepId": "review",
+          "attempt": 5,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:48:17.395Z",
+          "finishedAt": "2026-09-21T16:49:47.891Z",
+          "costUsd": null
+        }
+      ],
+      "reportedAgentCostUsd": 0.051262553999999995,
+      "costsComplete": false,
+      "notes": "Agent cost only; missing costs and Jev billing are unknown. Elapsed time includes queueing, approvals and deliberate recovery pauses."
+    },
+    {
+      "task": 2,
+      "id": "97c4778e-0ff7-4053-aa74-280f81ab4e1d",
+      "title": "[P2] Add a read-only run status CLI",
+      "status": "completed",
+      "url": "http://127.0.0.1:4319/?run=97c4778e-0ff7-4053-aa74-280f81ab4e1d",
+      "brief": "Product-owner specification for a real AgentLoom developer tool. Use only Node built-ins, no new dependencies. Add the specified script, native node:test test file and dedicated documentation file; no other tracked files may change. No changes to package.json, existing tests, workflows or application source. Shell execution must use execFile/spawn with shell:false and fixed argument arrays. Do not commit, push, create PRs or merge: the platform owns publication. npm ci --include=dev is authorized in the run workspace. Run the task tests, npm run typecheck, npm test and npm run build. You may read existing application types/routes to confirm response shapes. The task below resolves all product choices; preserve its AC IDs in a concise plan and end PLAN_READY. Optional improvements do not expand scope. Merging remains manual.\n\nAC1: Add scripts/run-status.mjs exporting summarizeRun(run) and a direct CLI: node scripts/run-status.mjs RUN_ID [--url URL] [--json]. URL defaults http://127.0.0.1:4317, must be an HTTP(S) origin with no credentials/query/fragment/non-root path. ID matches /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/. Invalid/missing/duplicate/unknown args exit 2 stderr only. Fetch GET /api/runs/:id with redirects forbidden and 3000ms abort timeout. HTTP errors, network failures, invalid JSON/shape exit 1 with concise stderr and no server body. No write requests.\nAC2: summarizeRun returns exactly {id,title,status,step,automation,prUrl}; step is the current step definition name or null when out of range, automation is automation.status or null, prUrl is git.prUrl or null. Required id/title/status are strings, steps array and currentStep nonnegative integer; used optional nested values must have their expected types or throw TypeError. Text output is labelled ID, Title, Status, Step, Automation, PR lines; missing values display '-'. --json outputs one object. Successful fetch exits 0 irrespective of run status (a failed run is still a successful status lookup). Import has no side effects.\nAC3: Add tests/run-status-cli.test.mjs testing current/out-of-range step, missing optional data, malformed required/optional fields and local-HTTP real CLI text/JSON/error/usage/redirect behavior. Docs docs/tools/run-status.md explain semantics and example commands. Only these three files change.",
+      "approvedPlan": "Proposed plan, awaiting approval. No implementation or file changes in this planning step.\n\n- **SCOPE:** Add only `scripts/run-status.mjs`, `tests/run-status-cli.test.mjs`, and `docs/tools/run-status.md`. Use Node built-ins and no new dependencies. Preserve all other tracked files, including package.json, existing tests, workflows, and application source. Process execution uses `execFile`/`spawn` with `shell:false` and fixed argument arrays.\n\n- **AC1 — CLI and transport:** Implement `node scripts/run-status.mjs RUN_ID [--url URL] [--json]`, exporting `summarizeRun(run)`. Validate IDs against `/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/`. Default URL to `http://127.0.0.1:4317`; accept only HTTP(S) origins without credentials, query, fragment, or non-root path. Missing, invalid, duplicate, or unknown arguments exit 2 with stderr only. Fetch only `GET /api/runs/:id`, forbid redirects, and apply a 3000ms abort timeout. HTTP/network failures, invalid JSON, and invalid response shapes exit 1 with concise stderr and no server body.\n\n- **AC2 — Summary and output:** Return exactly `{id,title,status,step,automation,prUrl}`. Require string id/title/status, a steps array, and nonnegative integer currentStep. Used optional nested values must have their expected types or throw `TypeError`. Resolve step from `steps[currentStep].definition.name`, returning null when out of range; automation is `automation.status` or null, and prUrl is `git.prUrl` or null. Text prints labelled ID, Title, Status, Step, Automation, and PR lines, displaying `-` for missing values. JSON prints one object. Successful lookups exit 0 regardless of run status. Import has no side effects.\n\n- **AC3 — Tests and documentation:** Use native `node:test` for current/out-of-range steps, missing optional data, malformed required/optional fields, exact summary keys, and side-effect-free import. Test the real CLI against local HTTP servers for text/JSON output, failed-run success, GET method/path, HTTP/network/timeout errors, invalid JSON/shapes, usage failures, and forbidden redirects. Assert exit codes, output streams, and server-body suppression. Document semantics and example commands in the dedicated documentation file.\n\nAfter implementation, run the four configured recorded commands:\n\n1. `node --test tests/run-status-cli.test.mjs` — 120s timeout.\n2. `npm run typecheck` — 600s timeout.\n3. `npm test` — 600s timeout.\n4. `npm run build` — 600s timeout.\n\nUse authorized `npm ci --include=dev` if needed. Central Docker Compose integration on the healthy candidate platform at external port 4319 / internal port 4317 satisfies the repository Compose requirement. Do not build, start, or change any Docker stack in this run.\n\nFinal review must account for **AC1–AC3 and SCOPE**, comparing tracked changes against `550761e1d43c2c4b2a49dd6ca4d8d74ff421cddc` and including untracked files. Stay on `agentloom/97c4778e-0ff7-4053-aa74-280f81ab4e1d`. Do not commit, push, create PRs, or merge. The platform owns publication; merging remains manual.",
+      "createdAt": "2026-09-21T16:02:04.262Z",
+      "updatedAt": "2026-09-21T16:28:25.089Z",
+      "elapsedMs": 1580827,
+      "approvedElapsedMs": 1356371,
+      "automation": {
+        "version": 1,
+        "publication": "draft",
+        "status": "done",
+        "repairsUsed": 1,
+        "maxRepairs": 2,
+        "message": "Draft PR ready. Merge remains manual.",
+        "decisions": [
+          {
+            "at": "2026-09-21T16:11:48.839Z",
+            "inputHash": "1da98459de039f19c369e6248cfb1a5b9e9d38b42a814dc6ae298e3f4cfe802b",
+            "choice": "return_to_implementer",
+            "confidence": 0.85,
+            "model": "jev-1.13.0",
+            "probabilities": {
+              "return_to_implementer": 0.91,
+              "request_clarification": 0.09,
+              "complete": 0
+            },
+            "action": "repair",
+            "reason": "Returning concrete findings within the approved scope.",
+            "appliedAt": "2026-09-21T16:11:48.867Z"
+          },
+          {
+            "at": "2026-09-21T16:18:59.436Z",
+            "inputHash": "ec00968964a4ef9228ab2c8d1026845bf1f817d4e11fc504930f3f08850ef266",
+            "choice": "request_clarification",
+            "confidence": 0.9,
+            "model": "jev-1.13.0",
+            "probabilities": {
+              "return_to_implementer": 0.04,
+              "request_clarification": 0.93,
+              "complete": 0.03
+            },
+            "action": "paused",
+            "reason": "Clarification, missing evidence, or repair limit requires your attention."
+          },
+          {
+            "at": "2026-09-21T16:28:16.894Z",
+            "inputHash": "03cf287e762335ea2471b21702b59af2971d93784c494095de2d1fc96d164c04",
+            "choice": "complete",
+            "confidence": 0.81,
+            "model": "jev-1.13.0",
+            "probabilities": {
+              "return_to_implementer": 0.02,
+              "request_clarification": 0.11,
+              "complete": 0.87
+            },
+            "action": "complete",
+            "reason": "Evidence supports completion, subject to source freshness checks.",
+            "appliedAt": "2026-09-21T16:28:17.208Z"
+          }
+        ],
+        "approvedAt": "2026-09-21T16:05:48.718Z",
+        "contractHash": "d69dc51a64199f521617b304ad1ff70db783b03bb4025b43d67449143e246ec6"
+      },
+      "git": {
+        "branch": "agentloom/97c4778e-0ff7-4053-aa74-280f81ab4e1d",
+        "baseBranch": "feat/single-reviewer-pr-machine",
+        "baseCommit": "550761e1d43c2c4b2a49dd6ca4d8d74ff421cddc",
+        "repository": "Animii/AgentLoom",
+        "approvedTree": "b33c49a0cd67c2f3776d0665f809937485d5b66e",
+        "publishing": false,
+        "prUrl": "https://github.com/Animii/AgentLoom/pull/3",
+        "publishedCommit": "8654e37498e708cc7fbe82167d8d0b10ea64ae13"
+      },
+      "validation": [
+        {
+          "attempt": 1,
+          "status": "passed",
+          "sourceUnchanged": true,
+          "signals": {
+            "status": "ready",
+            "model": "jev-1.13.0",
+            "claimsSupported": 0.75,
+            "scopeDrift": 0.17,
+            "needsHuman": 0.22
+          },
+          "commands": [
+            {
+              "executable": "node",
+              "args": [
+                "--test",
+                "tests/run-status-cli.test.mjs"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 4508
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "typecheck"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 4998
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "test"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": true,
+              "durationMs": 61255
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "build"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 2549
+            }
+          ]
+        },
+        {
+          "attempt": 2,
+          "status": "passed",
+          "sourceUnchanged": true,
+          "signals": {
+            "status": "ready",
+            "model": "jev-1.13.0",
+            "claimsSupported": 0.69,
+            "scopeDrift": 0.22,
+            "needsHuman": 0.19
+          },
+          "commands": [
+            {
+              "executable": "node",
+              "args": [
+                "--test",
+                "tests/run-status-cli.test.mjs"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 4745
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "typecheck"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 3930
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "test"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": true,
+              "durationMs": 64831
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "build"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 2679
+            }
+          ]
+        }
+      ],
+      "reviews": [
+        {
+          "attempt": 1,
+          "status": "blocked",
+          "source": "02b73100904a088670bedc50b41fa7218b57f87466bc8b366243a920cff7bb00",
+          "bundleHash": "b1382dbb58264573daaf3530a20f4e35e52bab1567595cd4605fd37d1b91df46",
+          "changes": {
+            "baseline": "8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972",
+            "added": [
+              "docs/tools/run-status.md",
+              "scripts/run-status.mjs",
+              "tests/run-status-cli.test.mjs"
+            ],
+            "modified": [],
+            "deleted": []
+          },
+          "reviewClarifications": [],
+          "reviewers": [
+            {
+              "provider": "codex",
+              "model": "gpt-6-astra",
+              "status": "completed",
+              "verdict": "BLOCKED",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "unmet",
+                  "evidence": [
+                    "scripts/run-status.mjs:64-83 validates normalized URL properties, allowing prohibited input components.",
+                    "Local HTTP probe: URLs ending in /?, /#, /ignored/.. and /%2e each triggered GET /api/runs/run-1 and exited 0 instead of 2.",
+                    "scripts/run-status.mjs:118-136 implements GET, redirect refusal, a 3000ms abort signal and response-body suppression."
+                  ]
+                },
+                {
+                  "id": "AC2",
+                  "status": "met",
+                  "evidence": [
+                    "scripts/run-status.mjs:12-61 validates required and used optional fields and returns exactly the six specified summary keys.",
+                    "scripts/run-status.mjs:150-210 implements labelled text, JSON output, successful lookup exit 0 and guarded direct execution.",
+                    "node --test tests/run-status-cli.test.mjs: independently passed 20/20 tests, including summary validation, failed-run success and side-effect-free import.",
+                    "src/server/app.ts:492-498 returns the run directly; src/shared/types.ts:16-22 confirms the consumed response structure."
+                  ]
+                },
+                {
+                  "id": "AC3",
+                  "status": "met",
+                  "evidence": [
+                    "tests/run-status-cli.test.mjs:75-349 covers required summary cases and real local-HTTP CLI text, JSON, errors, usage, redirects and timeout.",
+                    "docs/tools/run-status.md:7-73 documents commands, summary semantics and exit codes.",
+                    "Recorded validation: task tests, npm run typecheck, npm test and npm run build all exited 0."
+                  ]
+                },
+                {
+                  "id": "SCOPE",
+                  "status": "unmet",
+                  "evidence": [
+                    "Frozen change manifest lists only the three authorized additions, with no modifications or deletions.",
+                    "Added executable files use Node built-ins; tests/run-status-cli.test.mjs:26 uses spawn with shell:false and argument arrays.",
+                    "AGENTS.md:6 requires credentials to remain out of logs; scripts/run-status.mjs:69 and :171 expose malformed URL credentials in diagnostics.",
+                    "The supplied validation records contain no central Docker Compose validation result; this source copy has no Git metadata for independent baseline comparison."
+                  ]
+                }
+              ],
+              "findings": [
+                {
+                  "id": "F1",
+                  "criterion": "AC1",
+                  "severity": "blocker",
+                  "summary": "Origin validation accepts prohibited query, fragment and non-root-path inputs after URL normalization.",
+                  "evidence": [
+                    "scripts/run-status.mjs:67-83 checks only parsed search, hash and pathname. Empty query/fragment markers become empty properties, and dot segments normalize to root.",
+                    "Independent local-server probe supplied --url with /?, /#, /ignored/.. and /%2e suffixes. Every invocation issued GET /api/runs/run-1, printed a summary and exited 0; AC1 requires invalid arguments to exit 2 with stderr only."
+                  ]
+                },
+                {
+                  "id": "F2",
+                  "criterion": "SCOPE",
+                  "severity": "blocker",
+                  "summary": "Malformed credential-bearing URLs are echoed verbatim to stderr.",
+                  "evidence": [
+                    "scripts/run-status.mjs:69 embeds the complete input URL in UsageError before credential validation; :171 prints it.",
+                    "Independent probe: node scripts/run-status.mjs run-1 --url http://review-user:synthetic-secret@127.0.0.1:invalid exited 2 and included review-user:synthetic-secret in stderr, violating AGENTS.md:6."
+                  ]
+                }
+              ],
+              "resolutions": [],
+              "costUsd": null
+            }
+          ],
+          "challenge": null,
+          "chair": null
+        },
+        {
+          "attempt": 3,
+          "status": "pass",
+          "source": "5fc23c47a4da1c499ae9411c140f7ba0e1487faeca9801b26af234f9895dd219",
+          "bundleHash": "e5022e2d302921562651e722d2fd225bfe4788837fac93d5d547040c283de5e4",
+          "changes": {
+            "baseline": "8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972",
+            "added": [
+              "docs/tools/run-status.md",
+              "scripts/run-status.mjs",
+              "tests/run-status-cli.test.mjs"
+            ],
+            "modified": [],
+            "deleted": []
+          },
+          "reviewClarifications": [],
+          "reviewers": [
+            {
+              "provider": "codex",
+              "model": "gpt-6-astra",
+              "status": "completed",
+              "verdict": "NEEDS_EVIDENCE",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "met",
+                  "evidence": [
+                    "scripts/run-status.mjs:65-119 validates origins and arguments with sanitized usage errors.",
+                    "scripts/run-status.mjs:122-140 implements GET, forbidden redirects, a 3000ms abort signal and sanitized transport/JSON errors.",
+                    "Independent local-server probes rejected all eight prohibited URL suffixes with exit 2, empty stdout and zero requests; a valid control issued GET /api/runs/run-1 and exited 0.",
+                    "node --test tests/run-status-cli.test.mjs: 21/21 passed independently, including HTTP, network, timeout, redirect and usage cases."
+                  ]
+                },
+                {
+                  "id": "AC2",
+                  "status": "met",
+                  "evidence": [
+                    "scripts/run-status.mjs:13-62 validates required and used nested fields and returns exactly the six specified summary fields.",
+                    "scripts/run-status.mjs:154-214 implements labelled text, missing-value dashes, JSON output, successful lookup exit 0 and direct-execution detection.",
+                    "tests/run-status-cli.test.mjs:75-225 covers summary shape, malformed fields, absent data, import behavior and text/JSON output for failed runs; all passed independently."
+                  ]
+                },
+                {
+                  "id": "AC3",
+                  "status": "met",
+                  "evidence": [
+                    "tests/run-status-cli.test.mjs:1-379 provides native node:test coverage and real local-HTTP CLI tests.",
+                    "docs/tools/run-status.md:7-76 documents commands, summary semantics, URL restrictions and exit codes.",
+                    "Frozen change manifest lists only the three specified added files, with no modifications or deletions.",
+                    "Recorded attempt-2 validation: task tests 21/21, npm run typecheck, npm test 143/143 and npm run build all exited 0."
+                  ]
+                },
+                {
+                  "id": "SCOPE",
+                  "status": "unknown",
+                  "evidence": [
+                    "Frozen change manifest limits changes to scripts/run-status.mjs, tests/run-status-cli.test.mjs and docs/tools/run-status.md.",
+                    "Added executable files use Node built-ins; tests/run-status-cli.test.mjs:26 uses spawn with shell:false.",
+                    "AGENTS.md:6 requires Docker Compose application validation. The plan assigns this to central integration, but the supplied validation records contain only the four Node/npm commands."
+                  ]
+                }
+              ],
+              "findings": [
+                {
+                  "id": "F3",
+                  "criterion": "SCOPE",
+                  "severity": "warning",
+                  "summary": "Central Docker Compose validation cannot be verified from the supplied evidence.",
+                  "evidence": [
+                    "Approved plan names central Docker Compose integration at external port 4319/internal port 4317.",
+                    "Frozen attempt-2 validation contains no Compose integration command, observation or result."
+                  ]
+                }
+              ],
+              "resolutions": [
+                {
+                  "findingId": "F1",
+                  "evidence": "scripts/run-status.mjs:7 and :65-87 now check raw origin syntax before URL normalization. Independent local-server probes for /?, /#, /ignored/.. and /%2e each exited 2 with empty stdout and no requests. The corresponding regression cases at tests/run-status-cli.test.mjs:342-345 pass."
+                },
+                {
+                  "findingId": "F2",
+                  "evidence": "scripts/run-status.mjs:65-118 uses static usage-error messages without raw argument values. Independently invoking the CLI with http://review-user:synthetic-secret@127.0.0.1:invalid exited 2 with empty stdout and neither credential in stderr. Credential regression tests at tests/run-status-cli.test.mjs:360-379 pass."
+                }
+              ],
+              "costUsd": null
+            }
+          ],
+          "challenge": {
+            "question": "Product-owner validation receipt: central Docker Compose validation for source baseline 550761e1d43c2c4b2a49dd6ca4d8d74ff421cddc is complete. docker compose -f scripts/pilots/compose.yaml up -d --wait returned Healthy. Current docker inspect reports image sha256:b042349d88f5f2ab6a6b18fff4c9412052c5e9f4086dafe2c2d828ae2d678893, health healthy. Today at approximately 16:19 UTC I executed the repaired scripts/run-status.mjs against the running Compose app with this run ID, --url http://127.0.0.1:4317 --json: exit 0, one JSON summary with this run's id/title, status blocked, step Independent review, automation paused, prUrl null. This is measured operator evidence. No Docker files/application source changed in this task.\nReassess the missing central-validation evidence using that receipt, retain all AC IDs, and explicitly confirm prior F1/F2 resolutions with current code/tests. Reviewer copies intentionally omit .git: use the platform-recorded baseline/change manifest and actual source inspection for scope. This supplies evidence; it does not waive defects, tests, freshness or delivery guards.",
+            "reviewers": [
+              {
+                "provider": "codex",
+                "model": "gpt-6-astra",
+                "status": "completed",
+                "verdict": "PASS",
+                "criteria": [
+                  {
+                    "id": "AC1",
+                    "status": "met",
+                    "evidence": [
+                      "scripts/run-status.mjs:5-9 and :65-119 implement the default origin, ID validation, origin restrictions and sanitized argument errors.",
+                      "scripts/run-status.mjs:122-140 implements GET /api/runs/:id, forbidden redirects, a 3000ms abort timeout and sanitized HTTP/network/JSON errors.",
+                      "Independent local-server probes rejected eight prohibited URL suffixes with exit 2, empty stdout and zero requests. A valid control issued exactly GET /api/runs/run-1 and exited 0.",
+                      "Independent node --test tests/run-status-cli.test.mjs passed 21/21 tests, including usage, HTTP, network, timeout and redirect behavior."
+                    ]
+                  },
+                  {
+                    "id": "AC2",
+                    "status": "met",
+                    "evidence": [
+                      "scripts/run-status.mjs:13-62 validates required and used nested fields and returns exactly id, title, status, step, automation and prUrl.",
+                      "scripts/run-status.mjs:154-214 implements labelled text, missing-value dashes, single-object JSON output, successful lookup exit 0 and direct-execution detection.",
+                      "tests/run-status-cli.test.mjs:75-225 independently passed summary, malformed-field, optional-data, import and output tests, including successful lookup of a failed run.",
+                      "src/shared/types.ts:16-22 confirms the step definition, automation and git fields match application response types."
+                    ]
+                  },
+                  {
+                    "id": "AC3",
+                    "status": "met",
+                    "evidence": [
+                      "tests/run-status-cli.test.mjs:1-379 supplies native node:test coverage and real local-HTTP CLI tests; all 21 passed independently.",
+                      "docs/tools/run-status.md:7-76 documents commands, summary semantics, URL restrictions and exit codes.",
+                      "Frozen attempt-2 validation records task tests 21/21, npm run typecheck, npm test 143/143 and npm run build passing with exit 0; before/after source fingerprints match."
+                    ]
+                  },
+                  {
+                    "id": "SCOPE",
+                    "status": "met",
+                    "evidence": [
+                      "Platform-recorded change manifest lists only scripts/run-status.mjs, tests/run-status-cli.test.mjs and docs/tools/run-status.md as additions, with no modifications or deletions.",
+                      "Inspected executable files use Node built-ins; tests/run-status-cli.test.mjs:26 invokes spawn with shell:false and argument arrays.",
+                      "Product-owner receipt reports central Compose validation for baseline 550761e1d43c2c4b2a49dd6ca4d8d74ff421cddc: docker compose -f scripts/pilots/compose.yaml up -d --wait returned Healthy; inspected image sha256:b042349d88f5f2ab6a6b18fff4c9412052c5e9f4086dafe2c2d828ae2d678893 had healthy status.",
+                      "The receipt reports executing the repaired CLI against the running Compose application at approximately 16:19 UTC: exit 0 and one JSON summary with the expected run identity, status blocked, step Independent review, automation paused and prUrl null. This is supplied operator evidence, not a reviewer-executed Docker check."
+                    ]
+                  }
+                ],
+                "findings": [],
+                "resolutions": [
+                  {
+                    "findingId": "F1",
+                    "evidence": "scripts/run-status.mjs:7 and :65-87 validate raw origin syntax before URL normalization. Fresh independent local-server probes for /?, /#, /ignored/.. and /%2e each exited 2 with empty stdout and zero requests. Regression cases at tests/run-status-cli.test.mjs:342-349 passed in the independent 21/21 test run."
+                  },
+                  {
+                    "findingId": "F2",
+                    "evidence": "scripts/run-status.mjs:65-118 uses static usage-error messages without echoing supplied values. A fresh independent invocation with http://review-user:synthetic-secret@127.0.0.1:invalid exited 2 with empty stdout and neither credential in stderr. Credential regression tests at tests/run-status-cli.test.mjs:360-379 also passed."
+                  },
+                  {
+                    "findingId": "F3",
+                    "evidence": "The product-owner receipt supplies the previously missing central validation observations: successful Compose startup, healthy inspected image and a successful repaired-CLI lookup against that application. The platform manifest shows no application or Docker changes, connecting the validated application baseline to this three-file tool addition."
+                  }
+                ],
+                "costUsd": null
+              }
+            ],
+            "chair": null
+          },
+          "chair": null
+        }
+      ],
+      "costs": [
+        {
+          "stepId": "plan",
+          "attempt": 2,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:03:55.024Z",
+          "finishedAt": "2026-09-21T16:04:22.476Z",
+          "costUsd": null
+        },
+        {
+          "stepId": "build",
+          "attempt": 1,
+          "provider": "opencode",
+          "model": "deepseek/deepseek-flash",
+          "effort": "max",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:05:48.747Z",
+          "finishedAt": "2026-09-21T16:09:05.580Z",
+          "costUsd": 0.022863407999999998
+        },
+        {
+          "stepId": "build",
+          "attempt": 2,
+          "provider": "opencode",
+          "model": "deepseek/deepseek-flash",
+          "effort": "max",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:13:33.730Z",
+          "finishedAt": "2026-09-21T16:16:01.764Z",
+          "costUsd": 0.013255014000000002
+        },
+        {
+          "stepId": "review",
+          "attempt": 1,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "blocked",
+          "startedAt": "2026-09-21T16:10:20.202Z",
+          "finishedAt": "2026-09-21T16:11:47.619Z",
+          "costUsd": null
+        },
+        {
+          "stepId": "review",
+          "attempt": 3,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:26:56.102Z",
+          "finishedAt": "2026-09-21T16:28:15.344Z",
+          "costUsd": null
+        }
+      ],
+      "reportedAgentCostUsd": 0.036118422,
+      "costsComplete": false,
+      "notes": "Agent cost only; missing costs and Jev billing are unknown. Elapsed time includes queueing, approvals and deliberate recovery pauses."
+    },
+    {
+      "task": 3,
+      "id": "6764235c-d1dd-4741-9dce-5aef7143c202",
+      "title": "[P3] Export recorded validation evidence",
+      "status": "completed",
+      "url": "http://127.0.0.1:4319/?run=6764235c-d1dd-4741-9dce-5aef7143c202",
+      "brief": "Product-owner specification for a real AgentLoom developer tool. Use only Node built-ins, no new dependencies. Add the specified script, native node:test test file and dedicated documentation file; no other tracked files may change. No changes to package.json, existing tests, workflows or application source. Shell execution must use execFile/spawn with shell:false and fixed argument arrays. Do not commit, push, create PRs or merge: the platform owns publication. npm ci --include=dev is authorized in the run workspace. Run the task tests, npm run typecheck, npm test and npm run build. The product owner performs Docker Compose validation centrally against the healthy candidate platform on port 4319 externally / 4317 internally; this satisfies the repository Compose requirement for these CLI-only changes. Do not build, start or change Docker stacks. You may read existing application types/routes to confirm response shapes. The task below resolves all product choices; preserve its AC IDs in a concise plan and end PLAN_READY. Optional improvements do not expand scope. Merging remains manual.\n\nAC1: Add scripts/export-validation.mjs exporting summarizeValidation(run) and a direct CLI: node scripts/export-validation.mjs RUN_JSON_FILE. Read a local JSON run export only, no network. Return {runId,runStatus,steps} using string run.id and run.status. steps contains only entries with validation, mapped to {stepId,attempt,status,before,after,commands}; use step.definition.id, step.attempt and validation.{status,before,after}. Each command maps {executable,args,status,exitCode,startedAt,finishedAt,truncated} from the recorded command and evidence. Preserve command order, null exit codes, optional finishedAt as null, boolean truncated. Missing validation is omitted; no validation yields []. Do not include task/prompts/model output/command output/signals/credentials or other fields.\nAC2: Validate all projected required fields and reject malformed shapes with TypeError, including bad command args, invalid attempt (positive integer), bad exitCode (integer or null), missing timestamps, and non-array steps/commands. Do not require a full production Run beyond fields used by this projection. CLI prints formatted JSON and exit 0; read/parse/shape errors exit 1 concise stderr only; missing/extra arguments exit 2. Import has no side effects.\nAC3: Add tests/export-validation-cli.test.mjs for multiple validation steps, absent validation, failed commands/null exit codes, field omission, shape errors and actual CLI temp-file cases. Docs docs/tools/export-validation.md explain obtaining a run JSON via GET /api/runs/:id and running the exporter; command arguments may themselves contain secrets so this is not a general secret scrubber. Only these three files change. This pilot will deliberately restart the isolated server during implementation and recover the same run; preserve partial work and continue the approved task after recovery.",
+      "approvedPlan": "Proposed plan, pending explicit approval. No implementation changes will be made during planning.\n\n**SCOPE:** Add exactly these three files:\n\n- `scripts/export-validation.mjs`\n- `tests/export-validation-cli.test.mjs`\n- `docs/tools/export-validation.md`\n\nUse only Node built-ins, with no new dependencies or changes to package.json, existing tests, workflows, application source or database schema. Any subprocess execution uses `execFile`/`spawn`, `shell:false` and fixed argument arrays. The exporter never executes recorded commands.\n\n**AC1 — Exporter and projection:** Export `summarizeValidation(run)` and provide `node scripts/export-validation.mjs RUN_JSON_FILE`. Read local JSON only, without network access. Return exactly `{runId,runStatus,steps}`, using string `run.id` and `run.status`. Include only steps with validation, projecting `{stepId,attempt,status,before,after,commands}` from `step.definition.id`, `step.attempt` and validation evidence. Each command projects `{executable,args,status,exitCode,startedAt,finishedAt,truncated}` from its recorded command and evidence. Preserve command order, null exit codes and boolean truncation; normalize absent `finishedAt` to null. No validation yields `[]`. Omit all other fields, including tasks, prompts, model output, command output, signals and credentials.\n\n**AC2 — Validation and CLI behavior:** Validate all projected required fields without requiring unrelated production Run fields. Malformed shapes throw `TypeError`, including invalid command arguments, attempts other than positive integers, exit codes other than integers or null, missing required timestamps and non-array steps/commands. CLI success prints formatted JSON and exits 0. Read/parse/shape errors produce concise stderr only and exit 1; missing/extra arguments exit 2. Import has no side effects.\n\n**AC3 — Tests and documentation:** Add native `node:test` coverage for multiple validation steps, absent validation, failed commands/null exit codes, preserved order, timestamp normalization, exact field omission, minimal valid inputs and malformed shapes. Actual CLI temporary-file tests cover success, read/parse/shape failures, argument errors, stdout/stderr separation and side-effect-free import. Document obtaining a run JSON through `GET /api/runs/:id`, exporter usage and the warning that command arguments may contain secrets; this is not a general secret scrubber.\n\nRun the fixed validation commands after implementation:\n\n- `node --test tests/export-validation-cli.test.mjs` — 120 seconds.\n- `npm run typecheck` — 600 seconds.\n- `npm test` — 600 seconds.\n- `npm run build` — 600 seconds.\n\n`npm ci --include=dev` is authorized if needed.\n\n**Central evidence:** The product owner reports completed baseline Compose validation for `550761e1d43c2c4b2a49dd6ca4d8d74ff421cddc`: `docker compose -f scripts/pilots/compose.yaml up -d --wait` reported Healthy; inspection confirmed healthy image `sha256:b042349d88f5f2ab6a6b18fff4c9412052c5e9f4086dafe2c2d828ae2d678893`. Health and run-status CLIs successfully called the app, externally on 4319/internally on 4317. This satisfies the Compose requirement; no Docker stacks will be changed.\n\nRestart/recovery is an operator-run protocol measured after relevant transitions, not a code acceptance criterion or publication prerequisite. Preserve partial work and resume the approved task.\n\nFinal review accounts for AC1–AC3 and SCOPE using the platform-supplied source baseline and exact added/modified/deleted manifest, including untracked additions; the review copy omits `.git`. No tests, source freshness guards or defects are waived. Stay on the managed branch. No commits, pushes, PR creation or merges; publication belongs to the platform and merging remains manual.",
+      "createdAt": "2026-09-21T16:08:22.588Z",
+      "updatedAt": "2026-09-21T16:56:49.340Z",
+      "elapsedMs": 2906752,
+      "approvedElapsedMs": 948122,
+      "automation": {
+        "version": 1,
+        "publication": "draft",
+        "status": "done",
+        "repairsUsed": 1,
+        "maxRepairs": 2,
+        "message": "Draft PR ready. Merge remains manual.",
+        "decisions": [
+          {
+            "at": "2026-09-21T16:49:56.556Z",
+            "inputHash": "1c36fdfe3eabd731d171139a9c12e8af9bfedee5b8c50a07596b917843894a2b",
+            "choice": "return_to_implementer",
+            "confidence": 0.97,
+            "model": "jev-1.13.0",
+            "probabilities": {
+              "return_to_implementer": 0.98,
+              "request_clarification": 0.02,
+              "complete": 0
+            },
+            "action": "repair",
+            "reason": "Returning concrete findings within the approved scope.",
+            "appliedAt": "2026-09-21T16:49:56.574Z"
+          },
+          {
+            "at": "2026-09-21T16:56:41.853Z",
+            "inputHash": "217bf63e7d6e220d771920051c9a6dc4513647098ae1d51a9dd4bdd0109a2307",
+            "choice": "complete",
+            "confidence": 0.92,
+            "model": "jev-1.13.0",
+            "probabilities": {
+              "return_to_implementer": 0.02,
+              "request_clarification": 0.04,
+              "complete": 0.94
+            },
+            "action": "complete",
+            "reason": "Evidence supports completion, subject to source freshness checks.",
+            "appliedAt": "2026-09-21T16:56:42.269Z"
+          }
+        ],
+        "approvedAt": "2026-09-21T16:41:01.218Z",
+        "contractHash": "bcb3361e84830aa01e53c0ea718e845a14d8099c821f13a23e8b888705396110"
+      },
+      "git": {
+        "branch": "agentloom/6764235c-d1dd-4741-9dce-5aef7143c202",
+        "baseBranch": "feat/single-reviewer-pr-machine",
+        "baseCommit": "550761e1d43c2c4b2a49dd6ca4d8d74ff421cddc",
+        "repository": "Animii/AgentLoom",
+        "approvedTree": "6fe4f3fc2b18798893e5ac1f538116f23b67da35",
+        "publishing": false,
+        "prUrl": "https://github.com/Animii/AgentLoom/pull/6",
+        "publishedCommit": "2be202c016b6f59f9a6778bcf0c463a315c9e15b"
+      },
+      "validation": [
+        {
+          "attempt": 1,
+          "status": "passed",
+          "sourceUnchanged": true,
+          "signals": {
+            "status": "ready",
+            "model": "jev-1.13.0",
+            "claimsSupported": 0.63,
+            "scopeDrift": 0.12,
+            "needsHuman": 0.19
+          },
+          "commands": [
+            {
+              "executable": "node",
+              "args": [
+                "--test",
+                "tests/export-validation-cli.test.mjs"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 383
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "typecheck"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 4399
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "test"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": true,
+              "durationMs": 66925
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "build"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 2781
+            }
+          ]
+        },
+        {
+          "attempt": 2,
+          "status": "passed",
+          "sourceUnchanged": true,
+          "signals": {
+            "status": "ready",
+            "model": "jev-1.13.0",
+            "claimsSupported": 0.68,
+            "scopeDrift": 0.17,
+            "needsHuman": 0.19
+          },
+          "commands": [
+            {
+              "executable": "node",
+              "args": [
+                "--test",
+                "tests/export-validation-cli.test.mjs"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 481
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "typecheck"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 4109
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "test"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": true,
+              "durationMs": 68395
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "build"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 3020
+            }
+          ]
+        }
+      ],
+      "reviews": [
+        {
+          "attempt": 1,
+          "status": "blocked",
+          "source": "045ec1d437dad9ae607c260635812938a09c5cbb659bea09a313478a64ad868f",
+          "bundleHash": "6b328691a5da6b1a89933ddb9b02092a880df14b58806a48bd2f8b044ecfb709",
+          "changes": {
+            "baseline": "8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972",
+            "added": [
+              "docs/tools/export-validation.md",
+              "scripts/export-validation.mjs",
+              "tests/export-validation-cli.test.mjs"
+            ],
+            "modified": [],
+            "deleted": []
+          },
+          "reviewClarifications": [],
+          "reviewers": [
+            {
+              "provider": "codex",
+              "model": "gpt-6-astra",
+              "status": "completed",
+              "verdict": "BLOCKED",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "unmet",
+                  "evidence": [
+                    "scripts/export-validation.mjs:42 implements the specified successful projection and preserves command order.",
+                    "scripts/export-validation.mjs:104 forwards JSON.parse diagnostics containing excluded input content to stderr; reproduced on Node v24.21.0."
+                  ]
+                },
+                {
+                  "id": "AC2",
+                  "status": "unmet",
+                  "evidence": [
+                    "scripts/export-validation.mjs:90 implements exit codes 0/1/2; tests independently passed for ordinary CLI errors and side-effect-free import.",
+                    "scripts/export-validation.mjs:48 skips sparse argument slots, accepting malformed arguments instead of throwing TypeError."
+                  ]
+                },
+                {
+                  "id": "AC3",
+                  "status": "met",
+                  "evidence": [
+                    "tests/export-validation-cli.test.mjs:128 covers projections, omission, multiple steps, failed commands, malformed shapes and actual CLI cases.",
+                    "Independent node --test tests/export-validation-cli.test.mjs: exit 0, 14 tests passed.",
+                    "docs/tools/export-validation.md:7 documents GET /api/runs/:id; src/server/app.ts:492 confirms the response shape.",
+                    "docs/tools/export-validation.md:58 warns that arguments can contain secrets."
+                  ]
+                },
+                {
+                  "id": "SCOPE",
+                  "status": "met",
+                  "evidence": [
+                    "Platform manifest against sourceBaseline 8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972 lists exactly the three approved additions, with no modifications or deletions.",
+                    "Added files use Node built-ins; subprocess calls use execFile with shell:false.",
+                    "Recorded validation attempt 1: task tests, typecheck, npm test and build each exited 0; before and after fingerprints match.",
+                    "Product-owner specification assigns Compose validation centrally for these CLI-only changes."
+                  ]
+                }
+              ],
+              "findings": [
+                {
+                  "id": "F1",
+                  "criterion": "AC1",
+                  "severity": "blocker",
+                  "summary": "Malformed JSON can expose excluded task content or credentials through stderr.",
+                  "evidence": [
+                    "scripts/export-validation.mjs:104 includes the original JSON.parse error.message; line 108 prints it.",
+                    "Actual CLI probe with local file contents {\"task\": SECRET-TASK} exited 1 and printed a source excerpt containing SECRET-TAS.",
+                    "A local file containing the synthetic marker SECRET-CREDENTIAL printed that complete marker in stderr. The documented command-argument exception does not cover parser excerpts."
+                  ]
+                },
+                {
+                  "id": "F2",
+                  "criterion": "AC2",
+                  "severity": "blocker",
+                  "summary": "The exported function accepts sparse command arguments instead of rejecting malformed argument arrays.",
+                  "evidence": [
+                    "scripts/export-validation.mjs:48 validates with forEach, which skips empty slots; line 51 spreads those slots into undefined entries.",
+                    "Direct summarizeValidation probe using an otherwise valid minimal run and command.args = new Array(1) returned successfully. JSON.stringify of the summary produced args:[null], violating the required string argument shape."
+                  ]
+                }
+              ],
+              "resolutions": [],
+              "costUsd": null
+            }
+          ],
+          "challenge": null,
+          "chair": null
+        },
+        {
+          "attempt": 2,
+          "status": "pass",
+          "source": "002e0d271486714028315a643df8359c3e726a7fb40ae607b3ddc2fa26ee9aa4",
+          "bundleHash": "d82a4fed80ed9a418a1180669f9d576a2818ca4b05dc86297437b93fbd7c1c1d",
+          "changes": {
+            "baseline": "8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972",
+            "added": [
+              "docs/tools/export-validation.md",
+              "scripts/export-validation.mjs",
+              "tests/export-validation-cli.test.mjs"
+            ],
+            "modified": [],
+            "deleted": []
+          },
+          "reviewClarifications": [],
+          "reviewers": [
+            {
+              "provider": "codex",
+              "model": "gpt-6-astra",
+              "status": "completed",
+              "verdict": "PASS",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "met",
+                  "evidence": [
+                    "scripts/export-validation.mjs:42–94 explicitly projects the required fields, preserves order and null exit codes, and omits unrelated fields.",
+                    "scripts/export-validation.mjs:104–113 reads local JSON and suppresses parser excerpts.",
+                    "Independent minimal-run probe confirmed optional-field normalization, boolean truncation and literal argument preservation."
+                  ]
+                },
+                {
+                  "id": "AC2",
+                  "status": "met",
+                  "evidence": [
+                    "scripts/export-validation.mjs:11–91 validates projected shapes, integers, strings, booleans and every array slot.",
+                    "scripts/export-validation.mjs:97–127 implements CLI exit codes, stderr-only failures and guarded execution on import.",
+                    "Independent sparse-array probes threw TypeError; CLI and import tests passed."
+                  ]
+                },
+                {
+                  "id": "AC3",
+                  "status": "met",
+                  "evidence": [
+                    "tests/export-validation-cli.test.mjs:128–354 covers projections, omission, multiple steps, malformed shapes and actual CLI cases.",
+                    "Independent TMPDIR=\"$PWD\" node --test tests/export-validation-cli.test.mjs exited 0: 15 passed, 0 failed.",
+                    "docs/tools/export-validation.md:7–60 documents acquisition, usage, output and command-argument secret limitations; src/server/app.ts:492 confirms the documented endpoint returns the run.",
+                    "Recorded validation attempt 2: exporter tests, npm run typecheck, npm test and npm run build all exited 0; application tests reported 143 passed."
+                  ]
+                },
+                {
+                  "id": "SCOPE",
+                  "status": "met",
+                  "evidence": [
+                    "Platform manifest against sourceBaseline 8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972 lists exactly the three approved additions, with no modifications or deletions.",
+                    "Added JavaScript files import only Node built-ins and the exporter; tests use execFile with shell:false at lines 118 and 346.",
+                    "Recorded validation before/after fingerprints match. The approved task assigns Compose validation centrally and prohibits reviewer Docker operations."
+                  ]
+                }
+              ],
+              "findings": [],
+              "resolutions": [
+                {
+                  "findingId": "F1",
+                  "evidence": "scripts/export-validation.mjs:108–112 discards JSON.parse diagnostics. Independent actual-CLI probes containing malformed SECRET-TASK and SECRET-CREDENTIAL content each exited 1 with empty stdout and a fixed one-line error containing no content markers. The regression test at tests/export-validation-cli.test.mjs:322 also passed."
+                },
+                {
+                  "findingId": "F2",
+                  "evidence": "scripts/export-validation.mjs:48–51 validates arguments by index. Independent minimal-run probes with new Array(1) and a trailing sparse slot both threw TypeError. Sparse-array regression cases at tests/export-validation-cli.test.mjs:234–253 passed."
+                }
+              ],
+              "costUsd": null
+            }
+          ],
+          "challenge": null,
+          "chair": null
+        }
+      ],
+      "costs": [
+        {
+          "stepId": "plan",
+          "attempt": 2,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:37:11.538Z",
+          "finishedAt": "2026-09-21T16:37:41.053Z",
+          "costUsd": null
+        },
+        {
+          "stepId": "build",
+          "attempt": 2,
+          "provider": "opencode",
+          "model": "deepseek/deepseek-flash",
+          "effort": "max",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:45:14.811Z",
+          "finishedAt": "2026-09-21T16:47:03.914Z",
+          "costUsd": 0.00850635
+        },
+        {
+          "stepId": "build",
+          "attempt": 3,
+          "provider": "opencode",
+          "model": "deepseek/deepseek-flash",
+          "effort": "max",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:49:56.627Z",
+          "finishedAt": "2026-09-21T16:54:05.511Z",
+          "costUsd": 0.00827535
+        },
+        {
+          "stepId": "review",
+          "attempt": 1,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "blocked",
+          "startedAt": "2026-09-21T16:48:18.885Z",
+          "finishedAt": "2026-09-21T16:49:55.684Z",
+          "costUsd": null
+        },
+        {
+          "stepId": "review",
+          "attempt": 2,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:55:22.725Z",
+          "finishedAt": "2026-09-21T16:56:40.394Z",
+          "costUsd": null
+        }
+      ],
+      "reportedAgentCostUsd": 0.0167817,
+      "costsComplete": false,
+      "notes": "Agent cost only; missing costs and Jev billing are unknown. Elapsed time includes queueing, approvals and deliberate recovery pauses."
+    },
+    {
+      "task": 4,
+      "id": "7aa53c93-afce-43d7-a6f4-e59713e61e90",
+      "title": "[P4] Check Git project readiness and repair a fault",
+      "status": "completed",
+      "url": "http://127.0.0.1:4319/?run=7aa53c93-afce-43d7-a6f4-e59713e61e90",
+      "brief": "Product-owner specification for a real AgentLoom developer tool. Use only Node built-ins, no new dependencies. Add the specified script, native node:test test file and dedicated documentation file; no other tracked files may change. No changes to package.json, existing tests, workflows or application source. Shell execution must use execFile/spawn with shell:false and fixed argument arrays. Do not commit, push, create PRs or merge: the platform owns publication. npm ci --include=dev is authorized in the run workspace. Run the task tests, npm run typecheck, npm test and npm run build. The product owner performs Docker Compose validation centrally against the healthy candidate platform on port 4319 externally / 4317 internally; this satisfies the repository Compose requirement for these CLI-only changes. Do not build, start or change Docker stacks. You may read existing application types/routes to confirm response shapes. The task below resolves all product choices; preserve its AC IDs in a concise plan and end PLAN_READY. Optional improvements do not expand scope. Merging remains manual.\n\nAC1: Add scripts/check-git-project.mjs exporting async checkGitProject(folder) and a direct CLI: node scripts/check-git-project.mjs FOLDER. Read-only Git preflight: require a repository root (normal checkout or linked worktree), HEAD commit, attached branch, clean tracked+untracked working tree and origin URL recognized as GitHub HTTPS or git@github.com:owner/repo[.git]. Use execFile with shell:false, no hooks, no fsmonitor, no network or mutations. Report JSON {ready:boolean,branch:string|null,commit:string|null,repository:string|null,issues:string[]}. Ready only with every condition satisfied. Errors become concise issue strings, no raw Git stderr or credential-bearing remote URLs.\nAC2: CLI exits 0 ready, 1 not ready/unavailable folder, 2 missing/extra args (stderr only). Never creates files in inspected folders. Import has no side effects. Paths containing spaces must work; non-root subdirectories fail readiness. A missing origin is an issue, not an uncaught error.\nAC3: Add tests/check-git-project-cli.test.mjs using temporary real Git repositories covering initial/no-commit repo, clean ready repo, dirty/untracked, missing/unsupported origin, detached HEAD, linked worktree, subdirectory and CLI usage. Docs docs/tools/check-git-project.md explain readiness and no network behavior. Only these three files change. The pilot harness deliberately inserts one top-level throw after your initial implementation, before recorded validation; the independent reviewer must detect the resulting failure and Jev should request repair. On repair, remove that injected defect and fix any other in-scope findings without weakening tests.",
+      "approvedPlan": "I’ll inspect the project read-only, then prepare the approval plan with AC1–AC3 and the fixed validation commands.\n\nThe specification is complete; no questions remain. I inspected the repository instructions, package scripts and relevant directories read-only. Implementation awaits explicit approval through the platform.\n\n- **SCOPE:** Add only `scripts/check-git-project.mjs`, `tests/check-git-project-cli.test.mjs` and `docs/tools/check-git-project.md`. Use Node built-ins, with no new dependencies or changes to package.json, existing tests, workflows or application source. Remain on `agentloom/7aa53c93-afce-43d7-a6f4-e59713e61e90`. Do not commit, push, create PRs or merge.\n\n- **AC1:** Export async `checkGitProject(folder)` and provide `node scripts/check-git-project.mjs FOLDER`. Require a normal checkout or linked-worktree root, HEAD commit, attached branch, clean tracked and untracked working tree, and origin recognized as GitHub HTTPS or `git@github.com:owner/repo[.git]`. Return `{ready:boolean,branch:string|null,commit:string|null,repository:string|null,issues:string[]}`. Readiness requires every condition. Use `execFile` with `shell:false` and fixed argument arrays, disabling hooks and fsmonitor. Perform no network access or mutations. Convert errors into concise issues without raw Git stderr or credential-bearing URLs.\n\n- **AC2:** Verify exit codes 0 for ready, 1 for not ready or unavailable folder, and 2 for missing/extra arguments, with usage errors on stderr only. Import must have no side effects. Inspection must create no files. Support paths containing spaces; reject non-root subdirectories; report missing origin as an issue.\n\n- **AC3:** Add native `node:test` coverage using temporary real Git repositories for initial/no-commit, clean ready, tracked dirty, untracked, missing/unsupported origin, detached HEAD, linked worktree, subdirectory and CLI usage. Also verify AC2’s unavailable-folder, spaces, import and nonmutation behavior. Document readiness, usage, output, exit codes and no-network behavior. After the harness inserts its top-level throw, the independent reviewer must detect the failure and Jev must request repair. Remove the injected defect and address other in-scope findings without weakening tests.\n\nAfter implementation, run the approved commands:\n\n```text\nnode --test tests/check-git-project-cli.test.mjs\nnpm run typecheck\nnpm test\nnpm run build\n```\n\nThe task test timeout is 120 seconds; each npm command allows 600 seconds. If needed, use the authorized `npm ci --include=dev`.\n\nThe final reviewer must account for AC1–AC3 and SCOPE, comparing tracked changes against `550761e1d43c2c4b2a49dd6ca4d8d74ff421cddc` and including untracked files. Product-owner central Compose validation on ports 4319 externally / 4317 internally satisfies the repository requirement. Do not build, start or change Docker stacks. Publication remains platform-owned; merging remains manual.",
+      "createdAt": "2026-09-21T16:04:13.693Z",
+      "updatedAt": "2026-09-21T17:16:55.946Z",
+      "elapsedMs": 4362253,
+      "approvedElapsedMs": 4215495,
+      "automation": {
+        "version": 1,
+        "publication": "draft",
+        "status": "done",
+        "repairsUsed": 2,
+        "maxRepairs": 2,
+        "message": "Draft PR ready. Merge remains manual.",
+        "decisions": [
+          {
+            "at": "2026-09-21T16:18:49.470Z",
+            "inputHash": "b3ca45b92e65f55a0a7de311049693959e56852e246ee36d2483da5d3fcda2de",
+            "choice": "return_to_implementer",
+            "confidence": 0.94,
+            "model": "jev-1.13.0",
+            "probabilities": {
+              "return_to_implementer": 0.96,
+              "request_clarification": 0.04,
+              "complete": 0
+            },
+            "action": "repair",
+            "reason": "Returning concrete findings within the approved scope.",
+            "appliedAt": "2026-09-21T16:18:49.491Z"
+          },
+          {
+            "at": "2026-09-21T16:26:57.545Z",
+            "inputHash": "455700a76ff793f3f9e5d2dfdd48a965b5ec7d2081eee5760534861606d07eed",
+            "choice": "return_to_implementer",
+            "confidence": 0.95,
+            "model": "jev-1.13.0",
+            "probabilities": {
+              "return_to_implementer": 0.97,
+              "request_clarification": 0.03,
+              "complete": 0
+            },
+            "action": "repair",
+            "reason": "Returning concrete findings within the approved scope.",
+            "appliedAt": "2026-09-21T16:26:57.573Z"
+          },
+          {
+            "at": "2026-09-21T16:37:13.210Z",
+            "inputHash": "dfde118474986cbbcb7166a6948d433da43e04c4d7a2c64a53e5d8951734a2c7",
+            "choice": "return_to_implementer",
+            "confidence": 0.91,
+            "model": "jev-1.13.0",
+            "probabilities": {
+              "return_to_implementer": 0.94,
+              "request_clarification": 0.06,
+              "complete": 0
+            },
+            "action": "paused",
+            "reason": "Clarification, missing evidence, or repair limit requires your attention."
+          },
+          {
+            "at": "2026-09-21T16:46:58.607Z",
+            "inputHash": "19ffa8a3e66b1104aed8a8599067b4d4b70f2afff1ff1f43d6e5c3082672d276",
+            "choice": "return_to_implementer",
+            "confidence": 0.95,
+            "model": "jev-1.13.0",
+            "probabilities": {
+              "return_to_implementer": 0.97,
+              "request_clarification": 0.03,
+              "complete": 0
+            },
+            "action": "paused",
+            "reason": "Clarification, missing evidence, or repair limit requires your attention."
+          },
+          {
+            "at": "2026-09-21T17:00:11.130Z",
+            "inputHash": "6a0299670d7c49c2baca1b4a00d61b5b5e3bd39ed97633483a3baee0d4991023",
+            "choice": "return_to_implementer",
+            "confidence": 0.85,
+            "model": "jev-1.13.0",
+            "probabilities": {
+              "return_to_implementer": 0.9,
+              "request_clarification": 0.1,
+              "complete": 0
+            },
+            "action": "paused",
+            "reason": "Clarification, missing evidence, or repair limit requires your attention."
+          },
+          {
+            "at": "2026-09-21T17:08:48.676Z",
+            "inputHash": "ae57568635b62fd5946bcfba9701760eb44e1040881b3ac19a0f23e940c37f28",
+            "choice": "return_to_implementer",
+            "confidence": 0.93,
+            "model": "jev-1.13.0",
+            "probabilities": {
+              "return_to_implementer": 0.95,
+              "request_clarification": 0.05,
+              "complete": 0
+            },
+            "action": "paused",
+            "reason": "Clarification, missing evidence, or repair limit requires your attention."
+          },
+          {
+            "at": "2026-09-21T17:16:49.056Z",
+            "inputHash": "498fb952be9d501c59da90586f4bb2624bceae4163475a61ee41a1f16f80f85f",
+            "choice": "complete",
+            "confidence": 0.84,
+            "model": "jev-1.13.0",
+            "probabilities": {
+              "return_to_implementer": 0.04,
+              "request_clarification": 0.07,
+              "complete": 0.89
+            },
+            "action": "complete",
+            "reason": "Evidence supports completion, subject to source freshness checks.",
+            "appliedAt": "2026-09-21T17:16:49.378Z"
+          }
+        ],
+        "approvedAt": "2026-09-21T16:06:40.451Z",
+        "contractHash": "318fe9f00c9e70841e3e041a9b1a1f951d911afb87a32fc83fb286c81f0c230e"
+      },
+      "git": {
+        "branch": "agentloom/7aa53c93-afce-43d7-a6f4-e59713e61e90",
+        "baseBranch": "feat/single-reviewer-pr-machine",
+        "baseCommit": "550761e1d43c2c4b2a49dd6ca4d8d74ff421cddc",
+        "repository": "Animii/AgentLoom",
+        "approvedTree": "cdf91666f537139560b8032b8cefda9173ce4e45",
+        "publishing": false,
+        "prUrl": "https://github.com/Animii/AgentLoom/pull/7",
+        "publishedCommit": "01e1263c74943bf78508e6cc69956922baff862b"
+      },
+      "validation": [
+        {
+          "attempt": 1,
+          "status": "failed",
+          "sourceUnchanged": true,
+          "signals": {
+            "status": "ready",
+            "model": "jev-1.13.0",
+            "claimsSupported": 0.09,
+            "scopeDrift": 0.31,
+            "needsHuman": 0.3
+          },
+          "commands": [
+            {
+              "executable": "node",
+              "args": [
+                "--test",
+                "tests/check-git-project-cli.test.mjs"
+              ],
+              "status": "failed",
+              "exitCode": 1,
+              "truncated": false,
+              "durationMs": 85
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "typecheck"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 3689
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "test"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": true,
+              "durationMs": 62903
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "build"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 3220
+            }
+          ]
+        },
+        {
+          "attempt": 2,
+          "status": "passed",
+          "sourceUnchanged": true,
+          "signals": {
+            "status": "ready",
+            "model": "jev-1.13.0",
+            "claimsSupported": 0.7,
+            "scopeDrift": 0.21,
+            "needsHuman": 0.19
+          },
+          "commands": [
+            {
+              "executable": "node",
+              "args": [
+                "--test",
+                "tests/check-git-project-cli.test.mjs"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": -483
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "typecheck"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 4826
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "test"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": true,
+              "durationMs": 62274
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "build"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 3574
+            }
+          ]
+        },
+        {
+          "attempt": 3,
+          "status": "passed",
+          "sourceUnchanged": true,
+          "signals": {
+            "status": "ready",
+            "model": "jev-1.13.0",
+            "claimsSupported": 0.7,
+            "scopeDrift": 0.2,
+            "needsHuman": 0.15
+          },
+          "commands": [
+            {
+              "executable": "node",
+              "args": [
+                "--test",
+                "tests/check-git-project-cli.test.mjs"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 1713
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "typecheck"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 4161
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "test"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": true,
+              "durationMs": 62939
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "build"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 3044
+            }
+          ]
+        },
+        {
+          "attempt": 4,
+          "status": "passed",
+          "sourceUnchanged": true,
+          "signals": {
+            "status": "ready",
+            "model": "jev-1.13.0",
+            "claimsSupported": 0.6,
+            "scopeDrift": 0.49,
+            "needsHuman": 0.19
+          },
+          "commands": [
+            {
+              "executable": "node",
+              "args": [
+                "--test",
+                "tests/check-git-project-cli.test.mjs"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 2481
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "typecheck"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 3645
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "test"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": true,
+              "durationMs": 64697
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "build"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 3379
+            }
+          ]
+        },
+        {
+          "attempt": 5,
+          "status": "failed",
+          "sourceUnchanged": true,
+          "signals": {
+            "status": "ready",
+            "model": "jev-1.13.0",
+            "claimsSupported": 0.22,
+            "scopeDrift": 0.34,
+            "needsHuman": 0.4
+          },
+          "commands": [
+            {
+              "executable": "node",
+              "args": [
+                "--test",
+                "tests/check-git-project-cli.test.mjs"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 4767
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "typecheck"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 7705
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "test"
+              ],
+              "status": "failed",
+              "exitCode": 1,
+              "truncated": true,
+              "durationMs": 92164
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "build"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 3360
+            }
+          ]
+        },
+        {
+          "attempt": 6,
+          "status": "passed",
+          "sourceUnchanged": true,
+          "signals": {
+            "status": "ready",
+            "model": "jev-1.13.0",
+            "claimsSupported": 0.61,
+            "scopeDrift": 0.37,
+            "needsHuman": 0.2
+          },
+          "commands": [
+            {
+              "executable": "node",
+              "args": [
+                "--test",
+                "tests/check-git-project-cli.test.mjs"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 2698
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "typecheck"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 4062
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "test"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": true,
+              "durationMs": 58994
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "build"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 3204
+            }
+          ]
+        },
+        {
+          "attempt": 7,
+          "status": "passed",
+          "sourceUnchanged": true,
+          "signals": {
+            "status": "ready",
+            "model": "jev-1.13.0",
+            "claimsSupported": 0.64,
+            "scopeDrift": 0.37,
+            "needsHuman": 0.17
+          },
+          "commands": [
+            {
+              "executable": "node",
+              "args": [
+                "--test",
+                "tests/check-git-project-cli.test.mjs"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 2739
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "typecheck"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 4464
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "test"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": true,
+              "durationMs": 57715
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "build"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 2670
+            }
+          ]
+        }
+      ],
+      "reviews": [
+        {
+          "attempt": 1,
+          "status": "blocked",
+          "source": "30762356b038955f7a29c058ff6d6f9a4fceaa419d219862df9c1cd7fd8b0ec0",
+          "bundleHash": "c4fd3e67347f48435692245e9e6bf92bdfcdeadc165023f1125179c37cdebb74",
+          "changes": {
+            "baseline": "8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972",
+            "added": [
+              "docs/tools/check-git-project.md",
+              "scripts/check-git-project.mjs",
+              "tests/check-git-project-cli.test.mjs"
+            ],
+            "modified": [],
+            "deleted": []
+          },
+          "reviewClarifications": [],
+          "reviewers": [
+            {
+              "provider": "codex",
+              "model": "gpt-6-astra",
+              "status": "completed",
+              "verdict": "BLOCKED",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "unmet",
+                  "evidence": [
+                    "scripts/check-git-project.mjs:12-25 uses execFile with shell:false, disables hooks/fsmonitor and suppresses optional locks.",
+                    "scripts/check-git-project.mjs:102 throws during module evaluation, preventing programmatic import.",
+                    "scripts/check-git-project.mjs:70 uses status --porcelain without overriding untracked-file configuration; a focused real-repository probe returned ready:true with an untracked file."
+                  ]
+                },
+                {
+                  "id": "AC3",
+                  "status": "unmet",
+                  "evidence": [
+                    "tests/check-git-project-cli.test.mjs:54-249 defines the required real-repository, CLI, import and file-creation checks.",
+                    "docs/tools/check-git-project.md:49-67 documents readiness and offline behavior.",
+                    "Recorded validation and independent node --test tests/check-git-project-cli.test.mjs both exited 1 during import, with zero passing tests.",
+                    "Recorded npm run typecheck, npm test and npm run build passed; those results do not resolve the failing task test."
+                  ]
+                },
+                {
+                  "id": "AC2",
+                  "status": "unmet",
+                  "evidence": [
+                    "scripts/check-git-project.mjs:102 executes unconditionally after the CLI entry point.",
+                    "Independent CLI probes with missing and extra arguments both exited 1 instead of 2.",
+                    "A clean temporary repository produced ready:true JSON but exited 1 with an uncaught exception."
+                  ]
+                },
+                {
+                  "id": "SCOPE",
+                  "status": "met",
+                  "evidence": [
+                    "Frozen changes manifest lists only scripts/check-git-project.mjs, tests/check-git-project-cli.test.mjs and docs/tools/check-git-project.md as additions, with no modifications or deletions.",
+                    "scripts/check-git-project.mjs:2-6 and tests/check-git-project-cli.test.mjs:1-9 use Node built-ins and the local target module.",
+                    "Scope assessment relies on the supplied changes manifest; the assigned source copy contains no .git metadata for an independent baseline diff."
+                  ]
+                }
+              ],
+              "findings": [
+                {
+                  "id": "F1",
+                  "criterion": "AC2",
+                  "severity": "blocker",
+                  "summary": "An unconditional top-level throw prevents importing the module and overrides successful or usage-error CLI exits with exit 1.",
+                  "evidence": [
+                    "scripts/check-git-project.mjs:102 contains the unconditional CONTROLLED_PILOT_DEFECT throw.",
+                    "Independent task-test execution failed during module import before any test case ran.",
+                    "Independent CLI probes observed exit 1 for missing arguments, extra arguments and a clean ready repository."
+                  ]
+                },
+                {
+                  "id": "F2",
+                  "criterion": "AC1",
+                  "severity": "blocker",
+                  "summary": "Git configuration status.showUntrackedFiles=no causes an unclean repository to report ready:true.",
+                  "evidence": [
+                    "scripts/check-git-project.mjs:70 invokes git status --porcelain without explicitly including untracked files.",
+                    "In a temporary committed repository with a supported origin, adding untracked.txt produced ready:false. Setting status.showUntrackedFiles=no then produced ready:true with issues:[], while git status --porcelain --untracked-files=all still reported '?? untracked.txt'.",
+                    "The probe used the unchanged CLI; its JSON demonstrates this separate defect despite the subsequent top-level exception."
+                  ]
+                }
+              ],
+              "resolutions": [],
+              "costUsd": null
+            }
+          ],
+          "challenge": null,
+          "chair": null
+        },
+        {
+          "attempt": 2,
+          "status": "blocked",
+          "source": "28309247299675799995318acc031fa09e60d699945487c7be61409ad5676e3a",
+          "bundleHash": "c695444ad6f2abf7b6c4645030c321af6e35a5f8f1b65a50354c361232d1fc59",
+          "changes": {
+            "baseline": "8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972",
+            "added": [
+              "docs/tools/check-git-project.md",
+              "scripts/check-git-project.mjs",
+              "tests/check-git-project-cli.test.mjs"
+            ],
+            "modified": [],
+            "deleted": []
+          },
+          "reviewClarifications": [],
+          "reviewers": [
+            {
+              "provider": "codex",
+              "model": "gpt-6-astra",
+              "status": "completed",
+              "verdict": "BLOCKED",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "unmet",
+                  "evidence": [
+                    "scripts/check-git-project.mjs:12 uses execFile with shell:false and disables hooks and fsmonitor.",
+                    "scripts/check-git-project.mjs:70 leaves submodule visibility dependent on Git configuration. An independent CLI probe returned ready:true and exit 0 despite a changed tracked submodule commit."
+                  ]
+                },
+                {
+                  "id": "AC3",
+                  "status": "met",
+                  "evidence": [
+                    "tests/check-git-project-cli.test.mjs:54 onward covers the specified repository states, CLI behavior, imports and file creation checks.",
+                    "Independent node --test tests/check-git-project-cli.test.mjs: 9 passed, 0 failed, exit 0.",
+                    "docs/tools/check-git-project.md:49 documents readiness; line 61 documents offline behavior.",
+                    "Recorded validation attempt 2: task tests, npm run typecheck, npm test and npm run build all exited 0; npm test reported 143 passed."
+                  ]
+                },
+                {
+                  "id": "AC2",
+                  "status": "unmet",
+                  "evidence": [
+                    "Independent task tests confirm ordinary CLI exit codes, paths with spaces, unavailable folders, subdirectory rejection and side-effect-free import.",
+                    "scripts/check-git-project.mjs:70 invokes git status, which executed a configured clean filter in an independent probe and created preflight-created.txt inside the inspected repository."
+                  ]
+                },
+                {
+                  "id": "SCOPE",
+                  "status": "met",
+                  "evidence": [
+                    "Frozen change manifest lists only scripts/check-git-project.mjs, tests/check-git-project-cli.test.mjs and docs/tools/check-git-project.md as additions, with no modifications or deletions.",
+                    "Both added JavaScript files import only Node built-ins and the scoped module.",
+                    "The assigned copy has no Git metadata, so scope comparison relies on the supplied frozen manifest."
+                  ]
+                }
+              ],
+              "findings": [
+                {
+                  "id": "F3",
+                  "criterion": "AC1",
+                  "severity": "blocker",
+                  "summary": "diff.ignoreSubmodules=all hides a changed tracked submodule commit, allowing an unclean repository to report ready.",
+                  "evidence": [
+                    "scripts/check-git-project.mjs:70 specifies --untracked-files=all but does not override submodule ignore configuration.",
+                    "Independent temporary-repository probe: commit a local submodule, advance its checked-out commit, then set diff.ignoreSubmodules=all in the parent. The unchanged CLI returned exit 0, ready:true and issues:[].",
+                    "The same repository's git status --porcelain --untracked-files=all --ignore-submodules=none reported 'M child'; git ls-files --stage child and the submodule HEAD confirmed different commit IDs."
+                  ]
+                },
+                {
+                  "id": "F4",
+                  "criterion": "AC2",
+                  "severity": "blocker",
+                  "summary": "Inspection can execute a configured Git clean filter that creates files in the inspected folder, violating the no-file-creation requirement.",
+                  "evidence": [
+                    "scripts/check-git-project.mjs:12 disables hooks and fsmonitor but retains configured clean filters; line 70 invokes git status.",
+                    "Independent temporary-repository probe: commit file.txt containing 'original\\n' and .gitattributes containing '*.txt filter=probe'; configure filter.probe.clean to invoke a local Node driver that copies stdin and writes preflight-created.txt; replace file.txt with equal-length 'modified\\n'.",
+                    "Calling checkGitProject(root) created preflight-created.txt. Directory listings immediately before and after the call confirmed that the file was absent before inspection and present afterward."
+                  ]
+                }
+              ],
+              "resolutions": [
+                {
+                  "findingId": "F1",
+                  "evidence": "The current scripts/check-git-project.mjs ends at line 100 without the injected throw. Independent task tests passed module import, clean CLI exit 0, missing/extra argument exit 2, and not-ready exit 1."
+                },
+                {
+                  "findingId": "F2",
+                  "evidence": "scripts/check-git-project.mjs:70 now explicitly supplies --untracked-files=all. The regression at tests/check-git-project-cli.test.mjs:146 sets status.showUntrackedFiles=no and verifies ready:false plus CLI exit 1; it passed independently."
+                }
+              ],
+              "costUsd": null
+            }
+          ],
+          "challenge": null,
+          "chair": null
+        },
+        {
+          "attempt": 3,
+          "status": "blocked",
+          "source": "cd5566160e03463c3aac8272d762419a476512b16505ef70e43768db091aae6a",
+          "bundleHash": "6653cc8a74e13821b262501a05bba973666b323ced11b597f9072fa15f8b41ec",
+          "changes": {
+            "baseline": "8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972",
+            "added": [
+              "docs/tools/check-git-project.md",
+              "scripts/check-git-project.mjs",
+              "tests/check-git-project-cli.test.mjs"
+            ],
+            "modified": [],
+            "deleted": []
+          },
+          "reviewClarifications": [],
+          "reviewers": [
+            {
+              "provider": "codex",
+              "model": "gpt-6-astra",
+              "status": "completed",
+              "verdict": "BLOCKED",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "unmet",
+                  "evidence": [
+                    "scripts/check-git-project.mjs:40 implements the required report and readiness checks; line 83 overrides submodule ignore settings.",
+                    "Independent submodule-filter probe demonstrated that inspection executes a configured filter and creates a file, violating read-only behavior."
+                  ]
+                },
+                {
+                  "id": "AC3",
+                  "status": "met",
+                  "evidence": [
+                    "tests/check-git-project-cli.test.mjs:55 covers the required repository and CLI scenarios, with additional regression tests at lines 253 and 287.",
+                    "Independent command TMPDIR=\"$PWD\" node --test tests/check-git-project-cli.test.mjs passed 11/11 tests.",
+                    "Recorded attempt-3 validation passed typecheck, npm test (143/143), and build.",
+                    "docs/tools/check-git-project.md:49 documents readiness conditions and offline behavior."
+                  ]
+                },
+                {
+                  "id": "AC2",
+                  "status": "unmet",
+                  "evidence": [
+                    "CLI exit codes, paths with spaces, missing origin, subdirectory rejection, and import behavior passed independent task tests.",
+                    "Independent probe: checkGitProject(parent) changed preflight-created.txt from absent to present inside the inspected parent repository."
+                  ]
+                },
+                {
+                  "id": "SCOPE",
+                  "status": "met",
+                  "evidence": [
+                    "Frozen change manifest lists only the three authorized additions, with no modified or deleted files.",
+                    "The added implementation and tests import only Node built-ins."
+                  ]
+                }
+              ],
+              "findings": [
+                {
+                  "id": "F4",
+                  "criterion": "AC2",
+                  "severity": "blocker",
+                  "summary": "Filter neutralization misses submodule-local configuration, allowing inspection to execute a clean filter that creates files in the inspected folder.",
+                  "evidence": [
+                    "scripts/check-git-project.mjs:29 enumerates filter configuration only in the inspected root; line 83 invokes status with submodule inspection enabled.",
+                    "Independent temporary-repository probe: commit a child repository containing file.txt and '*.txt filter=childOnly' in .gitattributes, add it as a parent submodule, and configure filter.childOnly.clean only in the checked-out child. The driver copies stdin and writes parent/preflight-created.txt. Replace 'original\\n' with 'modified\\n' in child/file.txt.",
+                    "Before checkGitProject(parent), the marker was absent, parent filter keys were empty, and child filter keys contained filter.childOnly.clean. After inspection, the marker existed. The report returned ready:false, but inspection had already violated the no-file-creation requirement.",
+                    "tests/check-git-project-cli.test.mjs:287 tests filters configured directly in the inspected repository, leaving this submodule case uncovered."
+                  ]
+                }
+              ],
+              "resolutions": [
+                {
+                  "findingId": "F3",
+                  "evidence": "scripts/check-git-project.mjs:83 now supplies --ignore-submodules=none. The regression at tests/check-git-project-cli.test.mjs:253 independently passed: ordinary status hides the advanced submodule commit under diff.ignoreSubmodules=all, while the function reports ready:false and the CLI exits 1."
+                }
+              ],
+              "costUsd": null
+            }
+          ],
+          "challenge": null,
+          "chair": null
+        },
+        {
+          "attempt": 4,
+          "status": "needs_evidence",
+          "source": "3c9e6f0675f4750747a9add7c4860986bf28f803767934ce2ddd05d538d222fa",
+          "bundleHash": "a959a2d9411d19e9f59f8766f8934209bd007007d2537dc7e4cb27bd761e25a5",
+          "changes": {
+            "baseline": "8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972",
+            "added": [
+              "docs/tools/check-git-project.md",
+              "scripts/check-git-project.mjs",
+              "tests/check-git-project-cli.test.mjs"
+            ],
+            "modified": [],
+            "deleted": []
+          },
+          "reviewClarifications": [],
+          "reviewers": [
+            {
+              "provider": "codex",
+              "model": "gpt-6-astra",
+              "status": "failed",
+              "error": "Run execution was aborted",
+              "costUsd": null
+            }
+          ],
+          "challenge": null,
+          "chair": null
+        },
+        {
+          "attempt": 5,
+          "status": "blocked",
+          "source": "3c9e6f0675f4750747a9add7c4860986bf28f803767934ce2ddd05d538d222fa",
+          "bundleHash": "a959a2d9411d19e9f59f8766f8934209bd007007d2537dc7e4cb27bd761e25a5",
+          "changes": {
+            "baseline": "8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972",
+            "added": [
+              "docs/tools/check-git-project.md",
+              "scripts/check-git-project.mjs",
+              "tests/check-git-project-cli.test.mjs"
+            ],
+            "modified": [],
+            "deleted": []
+          },
+          "reviewClarifications": [],
+          "reviewers": [
+            {
+              "provider": "codex",
+              "model": "gpt-6-astra",
+              "status": "completed",
+              "verdict": "BLOCKED",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "unmet",
+                  "evidence": [
+                    "scripts/check-git-project.mjs:73 implements the exported preflight and readiness report.",
+                    "scripts/check-git-project.mjs:100 records a non-root issue but continues to status at line 116, allowing the filter execution described in F4 and violating read-only behavior."
+                  ]
+                },
+                {
+                  "id": "AC3",
+                  "status": "met",
+                  "evidence": [
+                    "tests/check-git-project-cli.test.mjs:55 covers the required repository, CLI, import and nonmutation scenarios; line 317 adds the root-level F4 regression.",
+                    "Independent node --test tests/check-git-project-cli.test.mjs: exit 0, 12 tests passed.",
+                    "docs/tools/check-git-project.md:49 documents readiness; line 64 documents offline behavior.",
+                    "Recorded validation attempt 4: task tests, npm run typecheck, npm test and npm run build all exited 0; before/after source hashes match. The approved specification assigns Compose validation centrally."
+                  ]
+                },
+                {
+                  "id": "AC2",
+                  "status": "unmet",
+                  "evidence": [
+                    "Independent temporary-repository probe: checkGitProject(parent/src) created parent/src/preflight-created.txt through a filter configured only in sibling submodule parent/child.",
+                    "Repeating through the direct CLI also created the marker, while exiting 1 with JSON and empty stderr."
+                  ]
+                },
+                {
+                  "id": "SCOPE",
+                  "status": "met",
+                  "evidence": [
+                    "Platform change manifest against sourceBaseline 8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972 lists only the three authorized additions, with no modifications or deletions.",
+                    "The added script and tests use Node built-ins. Review preserved source files and used disposable temporary repositories for probes."
+                  ]
+                }
+              ],
+              "findings": [
+                {
+                  "id": "F4",
+                  "criterion": "AC2",
+                  "severity": "blocker",
+                  "summary": "Submodule filter neutralization still misses sibling submodules when inspecting a non-root subdirectory, allowing file creation inside that inspected folder.",
+                  "evidence": [
+                    "scripts/check-git-project.mjs:34 runs ls-files relative to the supplied directory, so inspecting parent/src omits the gitlink at parent/child.",
+                    "scripts/check-git-project.mjs:100 continues after detecting a non-root directory; line 116 runs status, which inspects the sibling submodule without its filter overrides.",
+                    "Reproduction: commit parent/src/app.txt and a child submodule containing file.txt with '*.txt filter=childOnly'; configure filter.childOnly.clean only in the child to copy stdin and write parent/src/preflight-created.txt; modify child/file.txt.",
+                    "Independent probe: inspecting the parent root left the marker absent. Inspecting parent/src through either API or CLI changed marker existence from false to true. Both reported ready:false; CLI exited 1.",
+                    "tests/check-git-project-cli.test.mjs:317 tests only inspection from the parent repository root, leaving this subdirectory case uncovered."
+                  ]
+                }
+              ],
+              "resolutions": [],
+              "costUsd": null
+            }
+          ],
+          "challenge": null,
+          "chair": null
+        },
+        {
+          "attempt": 6,
+          "status": "blocked",
+          "source": "c7dfba0b3d1391c045ce1e415328f7c6168d5a740be4cfc0e2ef833686dd528c",
+          "bundleHash": "4d0a01e61fad6412443a2ad01837984ad042a89a72cad09dfc824f5911203cd5",
+          "changes": {
+            "baseline": "8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972",
+            "added": [
+              "docs/tools/check-git-project.md",
+              "scripts/check-git-project.mjs",
+              "tests/check-git-project-cli.test.mjs"
+            ],
+            "modified": [],
+            "deleted": []
+          },
+          "reviewClarifications": [],
+          "reviewers": [
+            {
+              "provider": "codex",
+              "model": "gpt-6-astra",
+              "status": "completed",
+              "verdict": "BLOCKED",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "unmet",
+                  "evidence": [
+                    "scripts/check-git-project.mjs:73 implements the required report and readiness checks using execFile with shell:false.",
+                    "scripts/check-git-project.mjs:59-62 silently ignores filter-discovery failures; an independent probe demonstrated repository code execution during inspection."
+                  ]
+                },
+                {
+                  "id": "AC3",
+                  "status": "unmet",
+                  "evidence": [
+                    "Independent node --test tests/check-git-project-cli.test.mjs exited 0: 13 tests passed, including the F4 regression.",
+                    "docs/tools/check-git-project.md:49-82 documents readiness and offline behavior.",
+                    "Recorded validation attempt 5: typecheck and build exited 0, but npm test exited 1 with 141 passing and 2 failing tests."
+                  ]
+                },
+                {
+                  "id": "AC2",
+                  "status": "unmet",
+                  "evidence": [
+                    "tests/check-git-project-cli.test.mjs covers exit codes, spaces, unavailable folders, imports and non-root rejection; all tests passed independently.",
+                    "Independent oversized-submodule-config probe: API and CLI each created filter-created.txt inside the inspected repository."
+                  ]
+                },
+                {
+                  "id": "SCOPE",
+                  "status": "met",
+                  "evidence": [
+                    "The supplied change manifest against sourceBaseline 8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972 lists only the three authorized additions, with no modifications or deletions.",
+                    "The added script and tests import only Node built-ins. Review preserved source files."
+                  ]
+                }
+              ],
+              "findings": [
+                {
+                  "id": "F5",
+                  "criterion": "AC2",
+                  "severity": "blocker",
+                  "summary": "Failed filter discovery silently permits submodule filters to execute and create files inside the inspected repository.",
+                  "evidence": [
+                    "scripts/check-git-project.mjs:24 limits Git output to 1 MiB. Lines 59-62 swallow config-list failures, then line 117 runs status without the missing filter overrides.",
+                    "Independent reproduction: create a committed child submodule with '*.txt filter=probe'; configure its clean driver to copy stdin and write a marker inside the parent; append 6,000 valid repeated configuration entries with approximately 200-character keys to the child configuration, exceeding the discovery output limit; modify child/file.txt.",
+                    "Calling checkGitProject(parent) changed marker existence from false to true. After removing the marker, invoking the CLI recreated it and exited 1. Both inspections reported working-tree changes rather than a discovery failure."
+                  ]
+                },
+                {
+                  "id": "F6",
+                  "criterion": "AC3",
+                  "severity": "blocker",
+                  "summary": "The required recorded full test suite failed, contradicting the implementer's claim that every validation command passed.",
+                  "evidence": [
+                    "Recorded validation attempt 5, npm test: exitCode 1, status failed.",
+                    "tests/model-catalog.test.ts:193-196 failed because the provider-close-stdin case returned 'timeout' instead of 'failed'; its enclosing suite also failed.",
+                    "The bundle contains no subsequent successful recorded full-suite run. This establishes a validation failure, not that these CLI additions caused the existing application test failure."
+                  ]
+                }
+              ],
+              "resolutions": [
+                {
+                  "findingId": "F4",
+                  "evidence": "scripts/check-git-project.mjs:114 now skips status entirely for non-root inspection; line 116 starts filter discovery at the repository root. The independently passing regression at tests/check-git-project-cli.test.mjs:361-404 reproduces the sibling-submodule fixture, verifies API and CLI leave the marker absent and snapshots unchanged, and confirms root inspection still detects the dirty submodule."
+                }
+              ],
+              "costUsd": null
+            }
+          ],
+          "challenge": null,
+          "chair": null
+        },
+        {
+          "attempt": 7,
+          "status": "blocked",
+          "source": "cb23dd3590b78e58d7c117c3cd262c0f9663b69f43167b66462f426e9595f067",
+          "bundleHash": "aae147348e999f333e969f6cac924f6413b21a9a87a2f1ceef3e3243e56b5180",
+          "changes": {
+            "baseline": "8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972",
+            "added": [
+              "docs/tools/check-git-project.md",
+              "scripts/check-git-project.mjs",
+              "tests/check-git-project-cli.test.mjs"
+            ],
+            "modified": [],
+            "deleted": []
+          },
+          "reviewClarifications": [],
+          "reviewers": [
+            {
+              "provider": "codex",
+              "model": "gpt-6-astra",
+              "status": "completed",
+              "verdict": "BLOCKED",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "unmet",
+                  "evidence": [
+                    "scripts/check-git-project.mjs:65 implements the required report and readiness checks.",
+                    "scripts/check-git-project.mjs:25 and :115 leave Git's automatic object fetching enabled; the independent partial-clone probe fetched missing objects during inspection."
+                  ]
+                },
+                {
+                  "id": "AC3",
+                  "status": "met",
+                  "evidence": [
+                    "Independent command TMPDIR=\"$PWD\" node --test tests/check-git-project-cli.test.mjs exited 0: 14 tests passed.",
+                    "Recorded validation attempt 6: task tests, npm run typecheck, npm test and npm run build all exited 0; before/after source fingerprints match.",
+                    "docs/tools/check-git-project.md:6 documents usage, output, readiness, exit codes and intended offline behavior."
+                  ]
+                },
+                {
+                  "id": "AC2",
+                  "status": "unmet",
+                  "evidence": [
+                    "tests/check-git-project-cli.test.mjs:201 and :468 cover CLI usage and import behavior; independent execution passed.",
+                    "Independent partial-clone probes: both checkGitProject(repo) and the CLI created three files under .git/objects/pack; CLI exited 1."
+                  ]
+                },
+                {
+                  "id": "SCOPE",
+                  "status": "met",
+                  "evidence": [
+                    "Platform change manifest against sourceBaseline 8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972 lists only the three authorized additions, with no modified or deleted files.",
+                    "The added script and tests import only Node built-ins and the task module."
+                  ]
+                }
+              ],
+              "findings": [
+                {
+                  "id": "F7",
+                  "criterion": "AC2",
+                  "severity": "blocker",
+                  "summary": "Inspecting a partial clone automatically fetches missing objects and creates files inside the inspected repository.",
+                  "evidence": [
+                    "scripts/check-git-project.mjs:25 suppresses optional locks but does not prevent automatic object fetching; :115 runs status, which can request missing attribute objects.",
+                    "Independent reproduction using real Git: commit .gitattributes containing '*.txt text' and file.txt; enable uploadpack.allowFilter on a local source; clone with --filter=blob:none --no-checkout; rename origin to cache and add a GitHub origin; run read-tree HEAD and create only file.txt in the working tree.",
+                    "Before inspection, rev-list --objects --missing=print HEAD confirmed missing blobs. Separate API and CLI fixtures each gained .pack, .idx and .promisor files under .git/objects/pack during inspection. Both reported working-tree changes; the CLI exited 1.",
+                    "The probe allowed only local file transport, preventing external network access while demonstrating automatic fetching and concrete repository mutation. This also violates AC1's no-mutation requirement."
+                  ]
+                }
+              ],
+              "resolutions": [
+                {
+                  "findingId": "F5",
+                  "evidence": "scripts/check-git-project.mjs:32 and :54 now propagate discovery failures; :106-120 skips status when discovery fails. The regression at tests/check-git-project-cli.test.mjs:361 independently passed, checking oversized configuration, absent markers, unchanged file listings and CLI exit 1."
+                },
+                {
+                  "findingId": "F6",
+                  "evidence": "Recorded validation attempt 6 supplies the subsequent successful full-suite run: npm test exited 0 with 143 passing tests, including the previously failing provider-close-stdin case. The validation source fingerprints remained unchanged."
+                }
+              ],
+              "costUsd": null
+            }
+          ],
+          "challenge": null,
+          "chair": null
+        },
+        {
+          "attempt": 8,
+          "status": "pass",
+          "source": "09193cc756c915f1284b88f40c4c13365d91c5d902e9e1cf4a16088a1d278baf",
+          "bundleHash": "98387eb7213f472cf0e9cdd7cf51c686ff8aab2711f4b5fafcbaa3a486921acb",
+          "changes": {
+            "baseline": "8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972",
+            "added": [
+              "docs/tools/check-git-project.md",
+              "scripts/check-git-project.mjs",
+              "tests/check-git-project-cli.test.mjs"
+            ],
+            "modified": [],
+            "deleted": []
+          },
+          "reviewClarifications": [],
+          "reviewers": [
+            {
+              "provider": "codex",
+              "model": "gpt-6-astra",
+              "status": "completed",
+              "verdict": "PASS",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "met",
+                  "evidence": [
+                    "scripts/check-git-project.mjs:12 uses execFile with shell:false, disables hooks/fsmonitor and suppresses optional locks and lazy fetching.",
+                    "scripts/check-git-project.mjs:90 implements root, HEAD, branch, cleanliness and origin checks with structured JSON and sanitized issues.",
+                    "Independent probes confirmed staged changes block readiness and configured hooks/fsmonitor do not execute; API and CLI preserved all repository file contents."
+                  ]
+                },
+                {
+                  "id": "AC3",
+                  "status": "met",
+                  "evidence": [
+                    "Independent command: node --test tests/check-git-project-cli.test.mjs exited 0; all 15 tests passed.",
+                    "tests/check-git-project-cli.test.mjs:72 covers the required real-repository cases, CLI behavior, import behavior and regression cases.",
+                    "docs/tools/check-git-project.md:49 documents readiness; :70 documents offline and read-only behavior.",
+                    "Recorded validation attempt 7: task tests, npm run typecheck, npm test (143 passing tests) and npm run build all exited 0; before/after source fingerprints match."
+                  ]
+                },
+                {
+                  "id": "AC2",
+                  "status": "met",
+                  "evidence": [
+                    "scripts/check-git-project.mjs:168 implements exit codes 0/1/2, stderr-only usage errors and guarded direct execution.",
+                    "Independent native tests passed for paths with spaces, unavailable folders, subdirectories, missing origin, import side effects and file creation.",
+                    "Independent partial-clone submodule fixtures retained their original pack files after separate API and CLI inspections; CLI exited 1."
+                  ]
+                },
+                {
+                  "id": "SCOPE",
+                  "status": "met",
+                  "evidence": [
+                    "Frozen manifest against sourceBaseline 8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972 lists exactly the three approved additions, with no modified or deleted files.",
+                    "Inspected implementation and tests use Node built-ins; no dependency or application changes appear in the manifest.",
+                    "Approved specification assigns Compose validation centrally for these CLI-only changes; no Docker stack operations were performed during review."
+                  ]
+                }
+              ],
+              "findings": [],
+              "resolutions": [
+                {
+                  "findingId": "F7",
+                  "evidence": "scripts/check-git-project.mjs:34 detects partial-clone/promisor configuration, and :131 skips status when detected; :25 also sets GIT_NO_LAZY_FETCH=1. The original partial-clone regression at tests/check-git-project-cli.test.mjs:485 passed independently, including unchanged file listings after API and CLI inspection. Additional independent partial-clone submodule probes began with two missing blobs and created no pack files; a diagnostic Git invocation confirmed lazy fetching was disabled."
+                }
+              ],
+              "costUsd": null
+            }
+          ],
+          "challenge": null,
+          "chair": null
+        }
+      ],
+      "costs": [
+        {
+          "stepId": "plan",
+          "attempt": 1,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:04:17.471Z",
+          "finishedAt": "2026-09-21T16:04:57.366Z",
+          "costUsd": null
+        },
+        {
+          "stepId": "build",
+          "attempt": 1,
+          "provider": "opencode",
+          "model": "deepseek/deepseek-flash",
+          "effort": "max",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:11:47.657Z",
+          "finishedAt": "2026-09-21T16:16:13.775Z",
+          "costUsd": 0.019063373999999998
+        },
+        {
+          "stepId": "build",
+          "attempt": 2,
+          "provider": "opencode",
+          "model": "deepseek/deepseek-flash",
+          "effort": "max",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:18:57.980Z",
+          "finishedAt": "2026-09-21T16:23:28.130Z",
+          "costUsd": 0.00756972
+        },
+        {
+          "stepId": "build",
+          "attempt": 3,
+          "provider": "opencode",
+          "model": "deepseek/deepseek-flash",
+          "effort": "max",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:28:15.909Z",
+          "finishedAt": "2026-09-21T16:34:29.453Z",
+          "costUsd": 0.032941134000000004
+        },
+        {
+          "stepId": "build",
+          "attempt": 4,
+          "provider": "opencode",
+          "model": "deepseek/deepseek-flash",
+          "effort": "max",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:39:31.169Z",
+          "finishedAt": "2026-09-21T16:43:36.446Z",
+          "costUsd": 0.026879519999999997
+        },
+        {
+          "stepId": "build",
+          "attempt": 5,
+          "provider": "opencode",
+          "model": "deepseek/deepseek-flash",
+          "effort": "max",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:50:57.882Z",
+          "finishedAt": "2026-09-21T16:55:40.553Z",
+          "costUsd": 0.03105502800000001
+        },
+        {
+          "stepId": "build",
+          "attempt": 6,
+          "provider": "opencode",
+          "model": "deepseek/deepseek-flash",
+          "effort": "max",
+          "status": "completed",
+          "startedAt": "2026-09-21T17:01:27.555Z",
+          "finishedAt": "2026-09-21T17:05:24.128Z",
+          "costUsd": 0.026623805999999996
+        },
+        {
+          "stepId": "build",
+          "attempt": 7,
+          "provider": "opencode",
+          "model": "deepseek/deepseek-flash",
+          "effort": "max",
+          "status": "completed",
+          "startedAt": "2026-09-21T17:09:40.406Z",
+          "finishedAt": "2026-09-21T17:13:07.750Z",
+          "costUsd": 0.02131806
+        },
+        {
+          "stepId": "review",
+          "attempt": 1,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "blocked",
+          "startedAt": "2026-09-21T16:17:25.032Z",
+          "finishedAt": "2026-09-21T16:18:47.791Z",
+          "costUsd": null
+        },
+        {
+          "stepId": "review",
+          "attempt": 2,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "blocked",
+          "startedAt": "2026-09-21T16:24:39.514Z",
+          "finishedAt": "2026-09-21T16:26:56.008Z",
+          "costUsd": null
+        },
+        {
+          "stepId": "review",
+          "attempt": 3,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "blocked",
+          "startedAt": "2026-09-21T16:35:40.847Z",
+          "finishedAt": "2026-09-21T16:37:11.486Z",
+          "costUsd": null
+        },
+        {
+          "stepId": "review",
+          "attempt": 4,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "failed",
+          "startedAt": "2026-09-21T16:44:52.072Z",
+          "finishedAt": "2026-09-21T16:45:04.081Z",
+          "costUsd": null
+        },
+        {
+          "stepId": "review",
+          "attempt": 5,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "blocked",
+          "startedAt": "2026-09-21T16:45:15.038Z",
+          "finishedAt": "2026-09-21T16:46:57.582Z",
+          "costUsd": null
+        },
+        {
+          "stepId": "review",
+          "attempt": 6,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "blocked",
+          "startedAt": "2026-09-21T16:57:32.084Z",
+          "finishedAt": "2026-09-21T17:00:09.768Z",
+          "costUsd": null
+        },
+        {
+          "stepId": "review",
+          "attempt": 7,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "blocked",
+          "startedAt": "2026-09-21T17:06:34.442Z",
+          "finishedAt": "2026-09-21T17:08:47.547Z",
+          "costUsd": null
+        },
+        {
+          "stepId": "review",
+          "attempt": 8,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "completed",
+          "startedAt": "2026-09-21T17:14:16.764Z",
+          "finishedAt": "2026-09-21T17:16:47.484Z",
+          "costUsd": null
+        }
+      ],
+      "reportedAgentCostUsd": 0.165450642,
+      "costsComplete": false,
+      "notes": "Agent cost only; missing costs and Jev billing are unknown. Elapsed time includes queueing, approvals and deliberate recovery pauses."
+    },
+    {
+      "task": 5,
+      "id": "552a1753-0612-418b-80e4-4d6ef1316510",
+      "title": "[P5] Verify a draft PR and retry publication",
+      "status": "completed",
+      "url": "http://127.0.0.1:4319/?run=552a1753-0612-418b-80e4-4d6ef1316510",
+      "brief": "Product-owner specification for a real AgentLoom developer tool. Use only Node built-ins, no new dependencies. Add the specified script, native node:test test file and dedicated documentation file; no other tracked files may change. No changes to package.json, existing tests, workflows or application source. Shell execution must use execFile/spawn with shell:false and fixed argument arrays. Do not commit, push, create PRs or merge: the platform owns publication. npm ci --include=dev is authorized in the run workspace. Run the task tests, npm run typecheck, npm test and npm run build. The product owner performs Docker Compose validation centrally against the healthy candidate platform on port 4319 externally / 4317 internally; this satisfies the repository Compose requirement for these CLI-only changes. Do not build, start or change Docker stacks. You may read existing application types/routes to confirm response shapes. The task below resolves all product choices; preserve its AC IDs in a concise plan and end PLAN_READY. Optional improvements do not expand scope. Merging remains manual.\n\nAC1: Add scripts/verify-draft.mjs exporting verifyDraftMetadata(pr,expectedCommit) and a direct CLI: node scripts/verify-draft.mjs OWNER/REPO PR_NUMBER EXPECTED_COMMIT. Validate repository /^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$/, positive decimal PR number, exact 40 lowercase hex commit. Invalid/missing/extra args exit 2 stderr only before launching gh. Run gh pr view NUMBER --repo OWNER/REPO --json state,isDraft,headRefOid,url via execFile shell:false, windowsHide:true, timeout 15000, maxBuffer 1MB. Read-only; no Git/GitHub mutation.\nAC2: verifyDraftMetadata validates state string, isDraft boolean, headRefOid 40 lowercase hex and url string; throws TypeError on malformed data or expected commit. Return {ok,issues,url}, ok only OPEN, draft true, headRefOid exactly expected. issues contains actionable mismatches. CLI outputs one JSON object and exits 0 when matched, 1 mismatch or gh/JSON/shape failure. Operational errors use concise stderr only, no raw gh stdout/stderr or credentials. Import has no side effects.\nAC3: Add tests/verify-draft-cli.test.mjs covering each mismatch, multiple mismatches, malformed inputs, and actual CLI with a disposable fake gh executable on PATH (portable Windows/POSIX helper acceptable); assert exact read-only gh args and usage never invokes it. Docs docs/tools/verify-draft.md include commands, exit codes and limitation: matching a commit verifies identity, not test success. Only these three files change. The pilot deliberately rejects the first publication transport attempt after all checks pass; resuming must publish the same approved commit without rerunning agents.",
+      "approvedPlan": "I’ll inspect the repository’s scripts, tests, and validation configuration read-only, then provide a plan covering AC1–AC3 and the three-file scope for approval.\n\nProposed plan for approval. Repository inspection confirms Node ≥24, ES modules, and a clean workspace on the required branch. No files have been changed.\n\n**SCOPE:** Add only `scripts/verify-draft.mjs`, `tests/verify-draft-cli.test.mjs`, and `docs/tools/verify-draft.md`. Use Node built-ins without new dependencies. Preserve package files, existing tests, workflows, application source, and database schema. Implementation begins only after platform-recorded user approval.\n\n**AC1 — Read-only CLI:** Export `verifyDraftMetadata(pr, expectedCommit)` and support:\n`node scripts/verify-draft.mjs OWNER/REPO PR_NUMBER EXPECTED_COMMIT`.\n\nValidate exactly three arguments: repository matching `/^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$/`, positive decimal PR number, and exactly 40 lowercase hexadecimal commit characters. Invalid, missing, or extra arguments produce stderr only, exit 2, and never invoke `gh`.\n\nUse `execFile` with the fixed argument array equivalent to `gh pr view NUMBER --repo OWNER/REPO --json state,isDraft,headRefOid,url`, with `shell:false`, `windowsHide:true`, timeout 15000 ms, and maxBuffer 1 MB. Perform no Git/GitHub mutations.\n\n**AC2 — Metadata and output:** Validate `state` and `url` as strings, `isDraft` as boolean, and `headRefOid` as exactly 40 lowercase hexadecimal characters. Throw `TypeError` for malformed metadata or expected commit. Return `{ok,issues,url}`; success requires `OPEN`, draft status true, and exact commit equality. Report actionable issues for every mismatch. Valid metadata produces one JSON object, exiting 0 for success or 1 for mismatch. GitHub execution, JSON parsing, and shape failures exit 1 with concise stderr only, excluding raw subprocess output and credentials. Importing the module has no side effects.\n\n**AC3 — Tests and documentation:** Use native `node:test` to cover success, each mismatch, combined mismatches, malformed metadata and expected commits, and import safety. Exercise the actual CLI using a disposable fake `gh` on PATH, asserting exact read-only arguments, exit codes, stdout/stderr behavior, operational failures, and zero invocation for invalid/missing/extra arguments. Document commands, exit codes, and that commit identity does not establish test success.\n\nAfter implementation, run the approved validation commands:\n\n- `node --test tests/verify-draft-cli.test.mjs` — 120-second timeout.\n- `npm run typecheck` — 600-second timeout.\n- `npm test` — 600-second timeout.\n- `npm run build` — 600-second timeout.\n\nUse `npm ci --include=dev` if needed. Central product-owner Compose validation at external port 4319/internal 4317 satisfies the repository requirement; do not build, start, or change Docker stacks.\n\nFinal review must account for AC1–AC3 and SCOPE, comparing against `550761e1d43c2c4b2a49dd6ca4d8d74ff421cddc`, including untracked files. Stay on the managed branch. Do not commit, push, create PRs, or merge. Platform publication must resume after the deliberate first transport rejection using the same approved commit without rerunning agents; merging remains manual.",
+      "createdAt": "2026-09-21T16:04:13.917Z",
+      "updatedAt": "2026-09-21T16:35:08.263Z",
+      "elapsedMs": 1854346,
+      "approvedElapsedMs": 1707628,
+      "automation": {
+        "version": 1,
+        "publication": "draft",
+        "status": "done",
+        "repairsUsed": 0,
+        "maxRepairs": 2,
+        "message": "Draft PR ready. Merge remains manual.",
+        "decisions": [
+          {
+            "at": "2026-09-21T16:25:31.508Z",
+            "inputHash": "4f6e471828926fa6d5285a19d716e9f60315ba6c4daf1b9553d95a04738728c2",
+            "choice": "request_clarification",
+            "confidence": 0.85,
+            "model": "jev-1.13.0",
+            "probabilities": {
+              "return_to_implementer": 0.07,
+              "request_clarification": 0.9,
+              "complete": 0.03
+            },
+            "action": "paused",
+            "reason": "Clarification, missing evidence, or repair limit requires your attention."
+          },
+          {
+            "at": "2026-09-21T16:32:23.018Z",
+            "inputHash": "0a2b758f09cdd9ef38ae1109d11c366bfcbe50529e873ddbb5079d50e427a803",
+            "choice": "complete",
+            "confidence": 0.64,
+            "model": "jev-1.13.0",
+            "probabilities": {
+              "return_to_implementer": 0.05,
+              "request_clarification": 0.19,
+              "complete": 0.76
+            },
+            "action": "complete",
+            "reason": "Evidence supports completion, subject to source freshness checks.",
+            "appliedAt": "2026-09-21T16:32:23.274Z"
+          }
+        ],
+        "approvedAt": "2026-09-21T16:06:40.635Z",
+        "contractHash": "368c5d6736b89e707c45190c223cb1c4b2598f6c8d62e48825f3b62c26711b2c"
+      },
+      "git": {
+        "branch": "agentloom/552a1753-0612-418b-80e4-4d6ef1316510",
+        "baseBranch": "feat/single-reviewer-pr-machine",
+        "baseCommit": "550761e1d43c2c4b2a49dd6ca4d8d74ff421cddc",
+        "repository": "Animii/AgentLoom",
+        "approvedTree": "019e0f12f4807b3c9b710d9dadb9925d3c9d7338",
+        "publishing": false,
+        "prUrl": "https://github.com/Animii/AgentLoom/pull/4",
+        "publishedCommit": "f9f52c38550914b463a2a0abba31ec4845cde8f3"
+      },
+      "validation": [
+        {
+          "attempt": 1,
+          "status": "passed",
+          "sourceUnchanged": true,
+          "signals": {
+            "status": "ready",
+            "model": "jev-1.13.0",
+            "claimsSupported": 0.64,
+            "scopeDrift": 0.21,
+            "needsHuman": 0.2
+          },
+          "commands": [
+            {
+              "executable": "node",
+              "args": [
+                "--test",
+                "tests/verify-draft-cli.test.mjs"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 1242
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "typecheck"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 3725
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "test"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": true,
+              "durationMs": 62806
+            },
+            {
+              "executable": "npm",
+              "args": [
+                "run",
+                "build"
+              ],
+              "status": "passed",
+              "exitCode": 0,
+              "truncated": false,
+              "durationMs": 2910
+            }
+          ]
+        }
+      ],
+      "reviews": [
+        {
+          "attempt": 2,
+          "status": "pass",
+          "source": "996d906bdc3d6aa0013ae3943b017db4cd967b48fa240db13b0881ebd7db29d6",
+          "bundleHash": "24967f4b64f9bebeab3d7d56c93788fddc092917fdbef2c79c3859b01dac168c",
+          "changes": {
+            "baseline": "8a1048fc03fa08d65120abfc1f3cf6b61c17c44be9f81a1ddf11b61bcbf1b972",
+            "added": [
+              "docs/tools/verify-draft.md",
+              "scripts/verify-draft.mjs",
+              "tests/verify-draft-cli.test.mjs"
+            ],
+            "modified": [],
+            "deleted": []
+          },
+          "reviewClarifications": [],
+          "reviewers": [
+            {
+              "provider": "codex",
+              "model": "gpt-6-astra",
+              "status": "completed",
+              "verdict": "NEEDS_EVIDENCE",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "met",
+                  "evidence": [
+                    "scripts/verify-draft.mjs:41 validates arguments before launching gh and returns exit 2 for usage errors.",
+                    "scripts/verify-draft.mjs:59 uses the exact read-only arguments and required execution options; independently confirmed with an in-memory execFile probe.",
+                    "tests/verify-draft-cli.test.mjs:214 checks invalid arguments produce stderr only and never invoke gh."
+                  ]
+                },
+                {
+                  "id": "AC3",
+                  "status": "unknown",
+                  "evidence": [
+                    "TMPDIR=\"$PWD\" node --test tests/verify-draft-cli.test.mjs: independently passed 14 tests, including mismatches, malformed inputs, actual CLI invocation, argument capture and import safety.",
+                    "docs/tools/verify-draft.md:7 documents commands; line 44 documents exit codes; line 55 distinguishes commit identity from test success.",
+                    "Recorded validation includes passing task tests, typecheck, 143 application tests and build.",
+                    "The supplied bundle contains no publication-attempt or resume evidence establishing that the deliberate transport rejection preserves the approved commit without rerunning agents."
+                  ]
+                },
+                {
+                  "id": "AC2",
+                  "status": "met",
+                  "evidence": [
+                    "scripts/verify-draft.mjs:13 validates metadata and expected commit, throws TypeError for malformed values, and collects all mismatches.",
+                    "scripts/verify-draft.mjs:78 emits JSON for valid metadata and concise stderr-only operational failures.",
+                    "scripts/verify-draft.mjs:107 guards direct execution; independent tests confirm importing produces no output or gh invocation."
+                  ]
+                },
+                {
+                  "id": "SCOPE",
+                  "status": "met",
+                  "evidence": [
+                    "Frozen changes inventory lists only the three authorized additions, with no modifications or deletions.",
+                    "scripts/verify-draft.mjs:2 and tests/verify-draft-cli.test.mjs:1 use Node built-ins without added dependencies.",
+                    "The specification assigns Compose validation centrally and prohibits implementation-side Docker changes; none are included in the supplied change inventory."
+                  ]
+                }
+              ],
+              "findings": [],
+              "resolutions": [],
+              "costUsd": null
+            }
+          ],
+          "challenge": {
+            "question": "Product-owner clarification of pilot protocol versus the deliverable: AC3 covers the tool's tests and documentation. The final sentence about deliberately rejecting and resuming publication describes an operator-run end-to-end experiment after review passes; it cannot be a pre-publication acceptance gate. That experiment remains required before I call this five-task pilot complete, and its actual attempt/resume/commit evidence will be recorded separately. Do not claim that experiment has already passed. Assess this three-file change against AC1, AC2, tool tests/docs in AC3 and SCOPE. No code defect or test failure is waived, and draft creation/merging remain platform-owned/manual respectively. Existing platform tests already record publication recovery without rerunning agents; tests/automation.test.ts covers that guard, and the recorded 143/143 baseline suite passed.\nFor completeness, central Compose validation is measured: candidate source 550761e1d43c2c4b2a49dd6ca4d8d74ff421cddc built and started with docker compose -f scripts/pilots/compose.yaml up -d --wait. docker inspect reports image sha256:b042349d88f5f2ab6a6b18fff4c9412052c5e9f4086dafe2c2d828ae2d678893, health healthy. Actual health and run-status tools have successfully called the app inside that container. Use the platform's frozen change manifest for scope; reviewer copies intentionally omit .git.",
+            "reviewers": [
+              {
+                "provider": "codex",
+                "model": "gpt-6-astra",
+                "status": "completed",
+                "verdict": "PASS",
+                "criteria": [
+                  {
+                    "id": "AC1",
+                    "status": "met",
+                    "evidence": [
+                      "scripts/verify-draft.mjs:41-54 validates exactly three arguments before invoking gh; invalid input returns exit 2 with stderr only at lines 79-82.",
+                      "scripts/verify-draft.mjs:59-62 invokes the specified read-only gh command with fixed arguments, shell:false, windowsHide:true, timeout 15000 and maxBuffer 1048576.",
+                      "tests/verify-draft-cli.test.mjs:137-144 asserts exact gh arguments; lines 214-240 assert invalid usage never invokes gh."
+                    ]
+                  },
+                  {
+                    "id": "AC3",
+                    "status": "met",
+                    "evidence": [
+                      "Independent command TMPDIR=\"$PWD\" node --test tests/verify-draft-cli.test.mjs passed 14/14 tests with zero failures.",
+                      "tests/verify-draft-cli.test.mjs:71-269 covers success, individual and combined mismatches, malformed inputs, actual CLI execution through disposable fake gh, operational failures, usage rejection and import safety.",
+                      "docs/tools/verify-draft.md:7-51 documents commands and exit codes; line 55 explicitly distinguishes commit identity from test success.",
+                      "Recorded validation passed the dedicated tests, npm run typecheck, npm test (143/143), and npm run build.",
+                      "Product-owner clarification separates the post-review publication experiment from AC3's tool tests and documentation; no completed experiment is claimed."
+                    ]
+                  },
+                  {
+                    "id": "AC2",
+                    "status": "met",
+                    "evidence": [
+                      "scripts/verify-draft.mjs:13-38 validates metadata and expected commit, throws TypeError for malformed values, and returns all applicable mismatches with the URL.",
+                      "scripts/verify-draft.mjs:78-104 emits one JSON object for valid metadata and uses concise stderr-only operational errors without exposing raw subprocess output.",
+                      "scripts/verify-draft.mjs:107-109 guards direct execution; the independently passing import-safety test confirms no output or gh invocation.",
+                      "An independent in-memory probe confirmed commits containing trailing newline, carriage return or Unicode line separators throw TypeError."
+                    ]
+                  },
+                  {
+                    "id": "SCOPE",
+                    "status": "met",
+                    "evidence": [
+                      "The platform's frozen change manifest lists only scripts/verify-draft.mjs, tests/verify-draft-cli.test.mjs and docs/tools/verify-draft.md as additions, with no modifications or deletions.",
+                      "The inspected implementation and tests use Node built-ins; no dependency or application changes appear in the manifest.",
+                      "Product-owner evidence records central Compose startup with --wait, a healthy inspected container image, and successful health/run-status calls, satisfying the explicitly centralized validation requirement."
+                    ]
+                  }
+                ],
+                "findings": [],
+                "resolutions": [],
+                "costUsd": null
+              }
+            ],
+            "chair": null
+          },
+          "chair": null
+        }
+      ],
+      "costs": [
+        {
+          "stepId": "plan",
+          "attempt": 1,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:04:22.664Z",
+          "finishedAt": "2026-09-21T16:05:04.898Z",
+          "costUsd": null
+        },
+        {
+          "stepId": "build",
+          "attempt": 1,
+          "provider": "opencode",
+          "model": "deepseek/deepseek-flash",
+          "effort": "max",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:19:53.503Z",
+          "finishedAt": "2026-09-21T16:22:51.673Z",
+          "costUsd": 0.021031565999999998
+        },
+        {
+          "stepId": "review",
+          "attempt": 2,
+          "provider": "codex",
+          "model": "gpt-6-astra",
+          "effort": "high",
+          "status": "completed",
+          "startedAt": "2026-09-21T16:31:27.384Z",
+          "finishedAt": "2026-09-21T16:32:21.605Z",
+          "costUsd": null
+        }
+      ],
+      "reportedAgentCostUsd": 0.021031565999999998,
+      "costsComplete": false,
+      "notes": "Agent cost only; missing costs and Jev billing are unknown. Elapsed time includes queueing, approvals and deliberate recovery pauses."
+    }
+  ],
+  "interventions": [
+    {
+      "tasks": [
+        1,
+        2
+      ],
+      "at": "2026-09-21T16:03:54.912Z",
+      "phase": "before initial plan approval",
+      "kind": "pilot setup clarification",
+      "note": "Clarified that central Compose validation satisfies standalone CLI changes; agents retain all four recorded commands and do not start new Docker stacks.",
+      "actor": "assistant acting as product owner",
+      "provenance": "reconstructed from persisted run conversations and review history after local log serialization corruption"
+    },
+    {
+      "tasks": [
+        1
+      ],
+      "phase": "after plan approval",
+      "kind": "supply missing validation receipt",
+      "note": "Attached measured healthy Compose image and successful live health CLI receipt in a focused review challenge. Explained platform source manifest for Git-free review copies. Kept both concrete URL/credential findings blocking.",
+      "at": "2026-09-21T16:15:28.139Z",
+      "actor": "assistant acting as product owner",
+      "provenance": "reconstructed from persisted run conversations and review history after local log serialization corruption"
+    },
+    {
+      "tasks": [
+        2
+      ],
+      "at": "2026-09-21T16:20:09.345Z",
+      "phase": "after plan approval",
+      "kind": "supply missing validation receipt",
+      "note": "Attached measured Compose validation and repaired run-status CLI against the live app; requested recheck of existing defect resolutions with no waived guards.",
+      "actor": "assistant acting as product owner",
+      "provenance": "reconstructed from persisted run conversations and review history after local log serialization corruption"
+    },
+    {
+      "tasks": [
+        5
+      ],
+      "at": "2026-09-21T16:26:57.242Z",
+      "phase": "after plan approval",
+      "kind": "clarify pilot protocol and validation receipt",
+      "note": "Distinguished post-review publication-retry experiment from tool acceptance criteria to remove a circular gate. Added actual central Compose receipt; post-publication experiment remained required and was later verified.",
+      "actor": "assistant acting as product owner",
+      "provenance": "reconstructed from persisted run conversations and review history after local log serialization corruption"
+    },
+    {
+      "at": "2026-09-21T16:33:34.0181967Z",
+      "tasks": [
+        1
+      ],
+      "note": "Astra passed with F3 documenting two inaccurate statements. Jev selected repair at 0.65 but platform correctly rejected an automatic repair for warning-only findings. Product owner chose an in-scope documentation correction and manually returned the recorded findings; no source edits by operator and no relaxed validation.",
+      "actor": "assistant acting as product owner",
+      "kind": "manual documentation repair",
+      "phase": "after plan approval"
+    },
+    {
+      "tasks": [
+        5
+      ],
+      "at": "2026-09-21T16:35:08.083Z",
+      "phase": "after completion",
+      "actor": "assistant operator",
+      "kind": "planned publication recovery",
+      "note": "Resumed after the deliberate one-time publication outage. Published exact same approved tree; all step records unchanged, proving no implementation, validation or review reran."
+    },
+    {
+      "at": "2026-09-21T16:36:14.3641780Z",
+      "tasks": [
+        3
+      ],
+      "note": "Included measured Compose receipt before approval and distinguished operator restart protocol from tool acceptance criteria, using lessons from tasks 1, 2 and 5.",
+      "actor": "assistant acting as product owner",
+      "kind": "pilot setup clarification",
+      "phase": "before initial plan approval"
+    },
+    {
+      "at": "2026-09-21T16:39:32.0549603Z",
+      "tasks": [
+        4
+      ],
+      "note": "Exactly two automatic repairs were used. Astra retained F4 with a reproducible submodule-local filter side effect; Jev requested repair but the platform stopped at its budget. Product owner authorized one further in-scope repair using the recorded finding. Automatic budget remains two; no tests or guards waived.",
+      "actor": "assistant acting as product owner",
+      "kind": "manual repair after budget exhausted",
+      "phase": "after plan approval"
+    },
+    {
+      "tasks": [
+        3,
+        4
+      ],
+      "at": "2026-09-21T16:45:15.648Z",
+      "phase": "during implementation and review",
+      "actor": "assistant operator",
+      "kind": "planned server interruption and recovery",
+      "note": "Stopped and recreated isolated Compose server with tested runtime 88faf8f. Both active runs became interrupted with automation paused. Stopped/restarted source fingerprints, branches, plans and repair budgets match. Completed PR runs remained done. Explicitly retried each interrupted step and resumed automation."
+    },
+    {
+      "at": "2026-09-21T16:46:07.7307872Z",
+      "tasks": [
+        1
+      ],
+      "note": "Original runtime lost the central Compose receipt after another repair, causing a second missing-evidence stop. Deployed tested 88faf8f during planned restart and requested fresh validation/review. Did not paste the receipt again: the new review must receive it from preserved history.",
+      "actor": "assistant acting as product owner",
+      "kind": "revalidate with retained context",
+      "phase": "after platform context-retention fix"
+    },
+    {
+      "at": "2026-09-21T16:50:58.185Z",
+      "tasks": [
+        4
+      ],
+      "phase": "after plan approval",
+      "actor": "assistant acting as product owner",
+      "kind": "second manual repair after budget exhausted",
+      "note": "Astra independently reproduced F4 from a non-root subdirectory: inspecting parent/src missed sibling submodule filter overrides and created a file. Authorized a further same-scope correction using the recorded finding. The two-automatic-repair budget remains unchanged; no code edits by operator and no waived gates."
+    },
+    {
+      "at": "2026-09-21T17:01:27.281Z",
+      "tasks": [
+        4
+      ],
+      "phase": "after plan approval",
+      "actor": "assistant acting as product owner",
+      "kind": "third manual repair after budget exhausted",
+      "note": "Astra resolved F4 but reproduced a separate F5: oversized child Git config exceeded discovery output limit, swallowed the error and allowed a filter to create a file. Authorized a same-scope fail-closed fix and regression test. Recorded npm test also reproduced the old frozen-baseline close-stdin fixture failure (F6); full validation must pass again. No existing tests may change and no failure is waived."
+    },
+    {
+      "at": "2026-09-21T17:09:40.969Z",
+      "tasks": [
+        4
+      ],
+      "phase": "after plan approval",
+      "actor": "assistant acting as product owner",
+      "kind": "fourth manual repair after budget exhausted",
+      "note": "Prior filter discovery and validation findings resolved, but Astra reproduced lazy fetching in a partial clone: inspection created pack/index/promisor files. Authorized the concrete same-scope no-network/no-mutation correction and regression coverage. Automatic repair limit remains two, no source edits by operator and no waived criterion."
+    }
+  ],
+  "protocol": {
+    "sourceCommit": "550761e1d43c2c4b2a49dd6ca4d8d74ff421cddc",
+    "initialRuntime": "550761e",
+    "resumedRuntime": "88faf8f",
+    "finalPlatformRuntime": "a32cf08",
+    "merging": "manual",
+    "scope": "Five correlated standalone developer tools; not a statistical model-quality comparison."
+  }
+}

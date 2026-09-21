@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type SyntheticEvent } from 'react';
 import type { ProjectInfo, Run, Workflow } from '../shared/types.js';
 import ProjectImport from './ProjectImport';
+import { supportsEscalation } from '../shared/automation';
 
 type RunMode = 'live' | 'demo';
 
@@ -50,6 +51,7 @@ export default function NewRunDialog({
   const [workflowSelection, setWorkflowSelection] = useState('');
   const [mode, setMode] = useState<RunMode>('live');
   const [delivery,setDelivery]=useState('manual');
+  const [rescue,setRescue]=useState(true);
   const selectedWorkflow=workflows.find(w=>w.id===workflowSelection);
   const automationEligible=mode==='live' && projects.find(p=>p.id===project)?.workspaceMode==='worktree' && !!selectedWorkflow?.steps[0]?.planning && !!selectedWorkflow.steps.at(-1)?.council && !selectedWorkflow.steps.slice(1,-1).some(s=>s.approval);
   const [submitting, setSubmitting] = useState(false);
@@ -73,10 +75,11 @@ export default function NewRunDialog({
       setTitle(initialDemo ? 'Explore an approval workflow' : '');
       setTask(initialDemo ? 'Propose a small text utility and explain each handoff.' : '');
       setMode(initialDemo ? 'demo' : 'live');
-      setDelivery('manual');
+      setDelivery(initialDemo ? 'manual' : 'draft');
       setProject(initialProject ?? projects[0]?.id ?? '');
-      setWorkflowSelection(workflows[0]?.id ?? '');
+      setWorkflowSelection(workflows.find(w=>w.id==='single-review-delivery')?.id ?? workflows[0]?.id ?? '');
       setSubmitting(false);
+      setRescue(true);
       setError(null);
       setAddingProject(false);
     }
@@ -84,6 +87,7 @@ export default function NewRunDialog({
   }, [open, initialDemo, initialProject, projects, workflows]);
 
   useEffect(() => { if (open && !project && projects.length) setProject(initialProject ?? projects[0].id); }, [open, project, projects, initialProject]);
+  useEffect(() => { if (open && !workflowSelection && workflows.length) setWorkflowSelection(workflows.find(w=>w.id==='single-review-delivery')?.id ?? workflows[0].id); }, [open, workflowSelection, workflows]);
 
   const canSubmit =
     !submitting &&
@@ -117,7 +121,7 @@ export default function NewRunDialog({
           expectedWorkspaceMode: projects.find(item => item.id === project)?.workspaceMode ?? 'isolated',
           workflowId: workflowSelection,
           mode,
-          ...(automationEligible && delivery!=='manual'?{automation:{publication:delivery}}:{}),
+          ...(automationEligible && delivery!=='manual'?{automation:{publication:delivery,...(rescue && selectedWorkflow && supportsEscalation(selectedWorkflow)?{escalation:'fable'}:{})}}:{}),
         }),
       });
       if (!response.ok) {
@@ -249,7 +253,9 @@ export default function NewRunDialog({
           </div>
         </div>
 
-        {automationEligible&&<div className="field"><label htmlFor={`${fieldId}-delivery`}>Delivery</label><select id={`${fieldId}-delivery`} value={delivery} onChange={e=>setDelivery(e.target.value)} disabled={submitting}><option value="manual">Manual approval gates</option><option value="draft">PR machine · automatic draft PR</option></select><p className="field-helper">Approve the plan first. Jev can request up to two repairs; passing tests and council review are required. Uncertainty pauses the run. Nothing merges automatically.</p></div>}
+        {automationEligible&&<div className="field"><label htmlFor={`${fieldId}-delivery`}>Delivery</label><select id={`${fieldId}-delivery`} value={delivery} onChange={e=>setDelivery(e.target.value)} disabled={submitting}><option value="manual">Manual approval gates</option><option value="draft">PR machine · automatic draft PR</option></select><p className="field-helper">Approve the plan first. Jev can request up to two repairs; passing tests and independent review are required. Uncertainty pauses the run. Nothing merges automatically.</p></div>}
+        {automationEligible && delivery==='draft' && selectedWorkflow && supportsEscalation(selectedWorkflow) && <label className="wf-checkbox field-helper"><input type="checkbox" style={{flexShrink:0}} checked={rescue} disabled={submitting} onChange={e=>setRescue(e.target.checked)} /> After two Flash repairs, allow one Fable rescue, then independent Astra review. Remaining blockers pause delivery.</label>}
+        {mode==='live' && selectedWorkflow?.steps.at(-1)?.council && projects.find(p=>p.id===project)?.workspaceMode!=='worktree' && <p className="field-helper">Automatic draft PRs require a Git worktree project with a GitHub origin. Change the project's access mode under Projects. This run will use manual approval gates.</p>}
         <div className="dialog-actions">
           <button type="button" className="btn ghost" onClick={onClose} disabled={submitting}>
             Cancel

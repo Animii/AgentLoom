@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { ManagedProject, Run, RunEvent, Workflow } from '../shared/types.js';
-import { initialWorkflows, evidenceWorkflow, councilWorkflow } from './templates.js';
+import { initialWorkflows, evidenceWorkflow, councilWorkflow, singleReviewWorkflow } from './templates.js';
 
 const MAX_EVENT_MESSAGE_LENGTH = 100000;
 const MAX_EVENTS_PER_QUERY = 2000;
@@ -69,6 +69,7 @@ export class Store {
   private seedTemplates(): void {
     const row = this.db.prepare('SELECT COUNT(*) AS count FROM workflows').get() as unknown as CountRow;
     if (Number(row.count) > 0) {
+      if (!this.getWorkflow(singleReviewWorkflow.id)) this.saveWorkflow(singleReviewWorkflow);
       if (!this.getWorkflow(councilWorkflow.id)) this.saveWorkflow(councilWorkflow);
       if (!this.getWorkflow(evidenceWorkflow.id)) this.saveWorkflow(evidenceWorkflow);
       return;

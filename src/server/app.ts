@@ -93,15 +93,16 @@ const stepDefinitionSchema = z
     access: z.enum(['read-only', 'workspace-write']),
     approval: z.boolean(),
     planning: z.boolean().optional(),
-    council: z.strictObject({reviewers:z.array(z.strictObject({id:idField,name:nameField,focus:z.string().min(1).max(2000),provider:z.enum(['claude','codex','opencode']),model:modelField.refine(v=>v.trim().length>0,'Council models must be explicit.'),effort:z.string()})).length(3)}).optional(),
+    council: z.strictObject({reviewers:z.array(z.strictObject({id:idField,name:nameField,focus:z.string().min(1).max(2000),provider:z.enum(['claude','codex','opencode']),model:modelField.refine(v=>v.trim().length>0,'Reviewer models must be explicit.'),effort:z.string()})).refine(v=>v.length===1||v.length===3,'Use one reviewer or a three-member council.'),secondOpinion:z.strictObject({id:idField,name:nameField,focus:z.string().min(1).max(2000),provider:z.enum(['claude','codex','opencode']),model:modelField.refine(v=>v.trim().length>0,'Reviewer models must be explicit.'),effort:z.string()}).optional()}).optional(),
     validation: z.strictObject({commands:z.array(z.strictObject({executable:z.string().min(1).max(1000).regex(/^[^\x00-\x1f]+$/),args:z.array(z.string().max(4000).refine(v=>!v.includes('\0'))).max(50),timeoutMs:z.number().int().min(100).max(3600000)})).min(1).max(8)}).optional(),
   })
   .superRefine((step, ctx) => {
     if(step.validation&&(step.planning||step.access!=='read-only'))ctx.addIssue({code:'custom',message:'Validation steps must be read-only and cannot be planning steps.'});
     if(step.council){
       if(step.validation || step.planning || step.access!=='read-only' || !step.approval || !step.model.trim())ctx.addIssue({code:'custom',message:'Council requires an explicit chair model, read-only access and approval; it cannot be planning or validation.'});
-      if(new Set(step.council.reviewers.map(r=>r.id)).size!==3 || step.council.reviewers.some(r=>r.id==='chair'))ctx.addIssue({code:'custom',message:'Council reviewer IDs must be unique and cannot be chair.'});
-      for(const member of step.council.reviewers)if(member.effort && !PROVIDER_EFFORTS[member.provider].includes(member.effort))ctx.addIssue({code:'custom',message:'Invalid council reviewer effort.'});
+      if(new Set(step.council.reviewers.map(r=>r.id)).size!==step.council.reviewers.length || step.council.reviewers.some(r=>r.id==='chair'))ctx.addIssue({code:'custom',message:'Council reviewer IDs must be unique and cannot be chair.'});
+      if(step.council.secondOpinion && (step.council.reviewers.length!==1 || ['chair',...step.council.reviewers.map(r=>r.id)].includes(step.council.secondOpinion.id)))ctx.addIssue({code:'custom',message:'A second opinion requires one reviewer and a separate member ID.'});
+      for(const member of [...step.council.reviewers,...(step.council.secondOpinion?[step.council.secondOpinion]:[])])if(member.effort && !PROVIDER_EFFORTS[member.provider].includes(member.effort))ctx.addIssue({code:'custom',message:'Invalid council reviewer effort.'});
     }
     const allowed = PROVIDER_EFFORTS[step.provider];
     if (step.effort !== '' && !allowed.includes(step.effort)) {
@@ -138,7 +139,7 @@ const workflowSchema = z
       if(step.council){
         if(index!==workflow.steps.length-1 || !workflow.steps.slice(0,index).some(s=>s.validation))ctx.addIssue({code:'custom',message:'Council must be the final step after recorded validation.'});
         const writers=workflow.steps.slice(0,index).filter(s=>s.access==='workspace-write');
-        if(writers.some(w=>step.council!.reviewers.some(r=>r.provider===w.provider && (!w.model.trim() || r.model.toLowerCase()===w.model.toLowerCase())) || step.provider===w.provider && (!w.model.trim() || step.model.toLowerCase()===w.model.toLowerCase())))ctx.addIssue({code:'custom',message:'The implementer model cannot be an independent council reviewer or chair.'});
+        if(writers.some(w=>[...step.council!.reviewers,...(step.council!.secondOpinion?[step.council!.secondOpinion]:[])].some(r=>r.provider===w.provider && (!w.model.trim() || r.model.toLowerCase()===w.model.toLowerCase())) || step.provider===w.provider && (!w.model.trim() || step.model.toLowerCase()===w.model.toLowerCase())))ctx.addIssue({code:'custom',message:'The implementer model cannot be an independent council reviewer or chair.'});
       }
       if(step.validation && (index===0 || index===workflow.steps.length-1 || !workflow.steps.slice(0,index).some(s=>s.approval&&s.planning) || !workflow.steps.at(-1)!.approval || workflow.steps.at(-1)!.access!=='read-only'))ctx.addIssue({code:'custom',message:'Recorded validation requires an approved planning step before it and a final read-only review with approval.'});
     });
@@ -159,7 +160,7 @@ const runInputSchema = z.strictObject({
   expectedWorkspaceMode: z.enum(['direct', 'isolated', 'worktree']).optional(),
   workflowId: idField,
   mode: z.enum(['live', 'demo']),
-  automation:z.strictObject({publication:z.enum(['manual','draft'])}).optional(),
+  automation:z.strictObject({publication:z.enum(['manual','draft']),escalation:z.literal('fable').optional()}).optional(),
 });
 
 const emptyBodySchema = z.strictObject({});
@@ -360,7 +361,7 @@ export async function createApp(config: AppConfig, options: CreateAppOptions = {
   }
   automation=new Automation(store,engine,evaluateJev,id=>publish(id));
   app.addHook('preHandler',async(request,reply)=>{
-    const match=/^\/api\/runs\/([^/]+)\/(messages|revise|rework|retry|cancel|approve)$/.exec(request.url.split('?')[0]);
+    const match=/^\/api\/runs\/([^/]+)\/(messages|revise|rework|retry|cancel|approve|second-opinion)$/.exec(request.url.split('?')[0]);
     if(request.method!=='POST'||!match)return;
     const run=store.getRun(match[1]);
     if(!run?.automation?.approvedAt)return;
@@ -374,6 +375,11 @@ export async function createApp(config: AppConfig, options: CreateAppOptions = {
   app.post<{Params:{id:string}}>('/api/runs/:id/revalidate',async(request,reply)=>{
     if(!emptyBodySchema.safeParse(bodyOrEmpty(request.body)).success)return sendError(reply,400,'Expected an empty body.');
     try{automation!.pause(request.params.id);return engine.revalidate(request.params.id);}catch(error){return sendError(reply,409,errorMessage(error));}
+  });
+  app.post<{Params:{id:string}}>('/api/runs/:id/second-opinion',async(request,reply)=>{
+    const parsed=z.strictObject({question:z.string().trim().min(1).max(8000)}).safeParse(request.body);
+    if(!parsed.success)return sendError(reply,400,'A focused question is required.');
+    try{return await engine.secondOpinion(request.params.id,parsed.data.question);}catch(error){return sendError(reply,409,errorMessage(error));}
   });
   assessor = createReviewAssessor(store, evaluateJev);
   app.post<{Params:{id:string;stepId:string}}>('/api/runs/:id/steps/:stepId/assessment', async(request,reply)=>{

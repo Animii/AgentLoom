@@ -1,0 +1,39 @@
+{
+  "at": "2026-09-21T16:52:41.069Z",
+  "results": [
+    {
+      "task": 1,
+      "runId": "2663e09e-29e4-4957-ab3d-904efea7bbb0",
+      "exitCode": 0,
+      "result": {
+        "ok": true
+      },
+      "passed": true
+    },
+    {
+      "task": 2,
+      "runId": "97c4778e-0ff7-4053-aa74-280f81ab4e1d",
+      "exitCode": 0,
+      "result": {
+        "id": "97c4778e-0ff7-4053-aa74-280f81ab4e1d",
+        "title": "[P2] Add a read-only run status CLI",
+        "status": "completed",
+        "step": null,
+        "automation": "done",
+        "prUrl": "https://github.com/Animii/AgentLoom/pull/3"
+      },
+      "passed": true
+    },
+    {
+      "task": 5,
+      "runId": "552a1753-0612-418b-80e4-4d6ef1316510",
+      "exitCode": 0,
+      "result": {
+        "ok": true,
+        "issues": [],
+        "url": "https://github.com/Animii/AgentLoom/pull/4"
+      },
+      "passed": true
+    }
+  ]
+}
