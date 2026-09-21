@@ -73,9 +73,9 @@ export default function NewRunDialog({
       setTitle(initialDemo ? 'Explore an approval workflow' : '');
       setTask(initialDemo ? 'Propose a small text utility and explain each handoff.' : '');
       setMode(initialDemo ? 'demo' : 'live');
-      setDelivery('manual');
+      setDelivery(initialDemo ? 'manual' : 'draft');
       setProject(initialProject ?? projects[0]?.id ?? '');
-      setWorkflowSelection(workflows[0]?.id ?? '');
+      setWorkflowSelection(workflows.find(w=>w.id==='single-review-delivery')?.id ?? workflows[0]?.id ?? '');
       setSubmitting(false);
       setError(null);
       setAddingProject(false);
@@ -84,6 +84,7 @@ export default function NewRunDialog({
   }, [open, initialDemo, initialProject, projects, workflows]);
 
   useEffect(() => { if (open && !project && projects.length) setProject(initialProject ?? projects[0].id); }, [open, project, projects, initialProject]);
+  useEffect(() => { if (open && !workflowSelection && workflows.length) setWorkflowSelection(workflows.find(w=>w.id==='single-review-delivery')?.id ?? workflows[0].id); }, [open, workflowSelection, workflows]);
 
   const canSubmit =
     !submitting &&
@@ -249,7 +250,8 @@ export default function NewRunDialog({
           </div>
         </div>
 
-        {automationEligible&&<div className="field"><label htmlFor={`${fieldId}-delivery`}>Delivery</label><select id={`${fieldId}-delivery`} value={delivery} onChange={e=>setDelivery(e.target.value)} disabled={submitting}><option value="manual">Manual approval gates</option><option value="draft">PR machine · automatic draft PR</option></select><p className="field-helper">Approve the plan first. Jev can request up to two repairs; passing tests and council review are required. Uncertainty pauses the run. Nothing merges automatically.</p></div>}
+        {automationEligible&&<div className="field"><label htmlFor={`${fieldId}-delivery`}>Delivery</label><select id={`${fieldId}-delivery`} value={delivery} onChange={e=>setDelivery(e.target.value)} disabled={submitting}><option value="manual">Manual approval gates</option><option value="draft">PR machine · automatic draft PR</option></select><p className="field-helper">Approve the plan first. Jev can request up to two repairs; passing tests and independent review are required. Uncertainty pauses the run. Nothing merges automatically.</p></div>}
+        {mode==='live' && selectedWorkflow?.steps.at(-1)?.council && projects.find(p=>p.id===project)?.workspaceMode!=='worktree' && <p className="field-helper">Automatic draft PRs require a Git worktree project with a GitHub origin. Change the project's access mode under Projects. This run will use manual approval gates.</p>}
         <div className="dialog-actions">
           <button type="button" className="btn ghost" onClick={onClose} disabled={submitting}>
             Cancel

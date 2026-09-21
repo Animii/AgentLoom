@@ -1,4 +1,4 @@
-import { runCouncil, councilSummary, assertCouncilCurrent } from './council.js';
+import { runCouncil, councilSummary, assertCouncilCurrent, approvedReviewCriteria } from './council.js';
 import { councilReady } from '../shared/council.js';
 import {runValidationCommand, sourceFingerprint, evidenceSummary, readSourceSnapshot, snapshotFingerprint} from './validation.js';
 import type {ValidationEvidence, ValidationSignals} from '../shared/types.js';
@@ -102,7 +102,7 @@ export class Engine {
     const now = new Date().toISOString();
     const projectLocation = await this.projects.forRun(input.project);
     if (input.expectedWorkspaceMode && input.expectedWorkspaceMode !== (projectLocation?.workspaceMode ?? 'isolated')) throw new Error('The project workspace mode changed. Reopen New run to review its current access before starting.');
-    if(input.automation && (input.mode!=='live' || projectLocation?.workspaceMode!=='worktree' || !workflow.steps[0]?.planning || !workflow.steps.at(-1)?.council || workflow.steps.slice(1,-1).some(s=>s.approval))) throw Error('Automation requires a live Git worktree, approved first plan, automatic intermediate steps and final outcome council.');
+    if(input.automation && (input.mode!=='live' || projectLocation?.workspaceMode!=='worktree' || !workflow.steps[0]?.planning || !workflow.steps.at(-1)?.council || workflow.steps.slice(1,-1).some(s=>s.approval))) throw Error('Automation requires a live Git worktree, approved first plan, automatic intermediate steps and final structured review.');
     const run: Run = {
       id: randomUUID(),
       title: input.title,
@@ -161,12 +161,13 @@ export class Engine {
     if (!step || step.status !== 'waiting_approval') {
       throw new Error('Current step is not waiting for approval');
     }
-    if (run.mode === 'live' && step.definition.council && !councilReady(step)) throw Error('Council findings and missing evidence must be resolved before approval.');
+    if (run.mode === 'live' && step.definition.council && !councilReady(step)) throw Error('Review findings and missing evidence must be resolved before approval.');
     if (BLOCKED_PATTERN.test(step.output)) throw Error('Resolve the reported blocker before approving.');
     if (step.assessment?.attempt === step.attempt && step.assessment.status === 'running') throw new Error('Wait for Jev to finish classifying this review before approving.');
     const uncertaintyToken = uncertainAssessmentToken(step);
     if (uncertaintyToken && acknowledgedAssessment !== uncertaintyToken) throw new Error('Acknowledge the current uncertain Jev assessment before approving.');
     if (run.mode==='live' && run.currentStep===run.steps.length-1 && run.steps.some(s=>s.definition.validation && (!s.validation || s.validation.status!=='passed' || s.validation.before!==s.validation.after))) throw Error('Recorded validation must pass before final approval.');
+    if(run.mode==='live' && step.definition.planning && run.steps.at(-1)?.definition.council?.reviewers.length===1 && !approvedReviewCriteria(run).length)throw Error('The plan needs explicit acceptance IDs (AC1, AC2, etc.) before approval.');
     if (step.pendingAskId) throw new Error('Answer the planner questions before approving a plan.');
     if(actor==='controller' && (!run.automation?.approvedAt || run.currentStep!==run.steps.length-1))throw Error('Controller approval is not authorized.');
     if(run.automation && step.definition.planning){run.automation.approvedAt=new Date().toISOString();run.automation.contractHash=createHash('sha256').update(JSON.stringify({task:run.task,plan:step.output,definitions:run.steps.map(s=>s.definition)})).digest('hex');run.automation.status='active';run.automation.message='Working within the approved plan.';}
@@ -264,7 +265,7 @@ export class Engine {
       step.status='pending';step.output='';step.error=null;step.sessionId=null;step.startedAt=null;step.finishedAt=null;step.costUsd=null;step.council=undefined;step.validation=undefined;step.toolCalls=[];step.conversation=undefined;step.pendingAskId=undefined;
     }
     if(run.git)delete run.git.approvedTree;
-    if(run.automation){run.automation.status='paused';run.automation.message='Repeating validation and council. Resume automation after inspecting the new results.';}
+    if(run.automation){run.automation.status='paused';run.automation.message='Repeating validation and review. Resume automation after inspecting the new results.';}
     run.currentStep=index;run.status='queued';run.error=null;this.persist(run);this.schedule();return run;
   }
 
@@ -322,14 +323,31 @@ export class Engine {
     return run;
   }
 
+  async secondOpinion(id: string, question: string): Promise<Run> {
+    const run=this.requireRun(id);this.projects.assertNoConflict(run);
+    const step=run.steps[run.currentStep];const evidence=step?.council;const member=step?.definition.council?.secondOpinion;
+    if(!['blocked','waiting_approval'].includes(run.status) || !evidence || !member || step.definition.council!.reviewers.length!==1)throw Error('A completed single review is required for a second opinion.');
+    if(evidence.secondOpinion || evidence.challenge)throw Error('A second opinion is already used or a challenge has started.');
+    if(!evidence.reviewers.every(r=>r.status==='completed'&&r.report))throw Error('Recover the original review before requesting another opinion.');
+    const revision=JSON.stringify(run);
+    if(await sourceFingerprint(run.workspace)!==evidence.source)throw Error('Review source is stale. Repeat validation and review.');
+    if(JSON.stringify(this.requireRun(id))!==revision)throw Error('The run changed; inspect it before requesting another opinion.');
+    step.history??=[];step.history.push({council:structuredClone(evidence),attempt:step.attempt,status:step.status,output:step.output,error:step.error,feedback:step.feedback,startedAt:step.startedAt,finishedAt:step.finishedAt,costUsd:step.costUsd});
+    evidence.secondOpinion={member:structuredClone(member),question};
+    evidence.reviewers.push({member:structuredClone(member),status:'pending',output:'',costUsd:null});
+    evidence.resumeRequested=true;delete evidence.chair;
+    step.status='pending';step.error=null;run.status='queued';run.error=null;
+    this.persist(run);this.emitEvent(id,step.definition.id,'revision','Requested a second opinion. The original report is preserved; both reports and synthesis are required.');this.schedule();return run;
+  }
+
   private challengeCouncil(id: string, stepId: string, question: string, messageId: string): Run {
     const run = this.requireRun(id);
     const step = run.steps[run.currentStep];
-    if (!step || step.definition.id !== stepId || !['blocked', 'waiting_approval'].includes(run.status) || !step.council) throw Error('Only the current completed council can receive a challenge.');
+    if (!step || step.definition.id !== stepId || !['blocked', 'waiting_approval'].includes(run.status) || !step.council) throw Error('Only the current completed review can receive a challenge.');
     if (step.council.challenge) throw Error('The focused challenge round is already used. Send findings to implementation or start a new run with clarified requirements.');
     if (step.council.status === 'stale') throw Error('Council evidence is stale. Repeat implementation and validation.');
     step.conversation ??= []; step.conversation.push(message('user', question, messageId));
-    step.council.challenge = { question, requested: true, reviewers: step.definition.council!.reviewers.map(member => ({member, status:'pending', output:'', costUsd:null})) };
+    step.council.challenge = { question, requested: true, reviewers: step.council.reviewers.map(({member}) => ({member, status:'pending', output:'', costUsd:null})) };
     step.status = 'pending'; run.status = 'queued'; run.error = null; step.error = null;
     this.persist(run); this.emitEvent(id, stepId, 'revision', 'Requested the single focused council challenge round.'); this.schedule(); return run;
   }

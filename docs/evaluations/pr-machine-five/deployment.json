@@ -1,0 +1,25 @@
+{
+  "at": "2026-09-21T17:11:43.519Z",
+  "runtimeCommit": "a32cf08",
+  "image": "sha256:70adfae784f3d36ed7b0766df7513a48b210c1566af2ce7bec74d92edc6b8cfd",
+  "health": "healthy",
+  "runsPreserved": 190,
+  "defaultWorkflow": "single-review-delivery",
+  "reviewer": {
+    "id": "correctness",
+    "name": "Astra review",
+    "focus": "Independently inspect all approved criteria, source changes, recorded tests, edge cases and scope. Report only concrete in-scope defects; optional suggestions are warnings.",
+    "provider": "codex",
+    "model": "gpt-6-astra",
+    "effort": "high"
+  },
+  "secondOpinion": {
+    "id": "second-opinion",
+    "name": "Fable second opinion",
+    "focus": "Independently assess the approved criteria and disputed outcome. Seek reproducible counterexamples, preserve scope and separate optional suggestions from blockers.",
+    "provider": "claude",
+    "model": "claude-fable-5-1",
+    "effort": "high"
+  },
+  "passed": true
+}

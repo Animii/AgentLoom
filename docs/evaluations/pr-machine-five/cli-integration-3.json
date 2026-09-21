@@ -1,0 +1,70 @@
+{
+  "at": "2026-09-21T16:57:34.998Z",
+  "task": 3,
+  "runId": "6764235c-d1dd-4741-9dce-5aef7143c202",
+  "sourceRun": "97c4778e-0ff7-4053-aa74-280f81ab4e1d",
+  "exitCode": 0,
+  "result": {
+    "runId": "97c4778e-0ff7-4053-aa74-280f81ab4e1d",
+    "runStatus": "completed",
+    "steps": [
+      {
+        "stepId": "validate",
+        "attempt": 2,
+        "status": "passed",
+        "before": "5fc23c47a4da1c499ae9411c140f7ba0e1487faeca9801b26af234f9895dd219",
+        "after": "5fc23c47a4da1c499ae9411c140f7ba0e1487faeca9801b26af234f9895dd219",
+        "commands": [
+          {
+            "executable": "node",
+            "args": [
+              "--test",
+              "tests/run-status-cli.test.mjs"
+            ],
+            "status": "passed",
+            "exitCode": 0,
+            "startedAt": "2026-09-21T16:16:01.856Z",
+            "finishedAt": "2026-09-21T16:16:06.601Z",
+            "truncated": false
+          },
+          {
+            "executable": "npm",
+            "args": [
+              "run",
+              "typecheck"
+            ],
+            "status": "passed",
+            "exitCode": 0,
+            "startedAt": "2026-09-21T16:16:06.609Z",
+            "finishedAt": "2026-09-21T16:16:10.539Z",
+            "truncated": false
+          },
+          {
+            "executable": "npm",
+            "args": [
+              "test"
+            ],
+            "status": "passed",
+            "exitCode": 0,
+            "startedAt": "2026-09-21T16:16:10.547Z",
+            "finishedAt": "2026-09-21T16:17:15.378Z",
+            "truncated": true
+          },
+          {
+            "executable": "npm",
+            "args": [
+              "run",
+              "build"
+            ],
+            "status": "passed",
+            "exitCode": 0,
+            "startedAt": "2026-09-21T16:17:15.387Z",
+            "finishedAt": "2026-09-21T16:17:18.066Z",
+            "truncated": false
+          }
+        ]
+      }
+    ]
+  },
+  "passed": true
+}

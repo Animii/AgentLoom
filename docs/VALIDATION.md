@@ -111,3 +111,41 @@ The real private-GitHub delivery pilot is `e03415bc-3960-4b3a-a181-e3bf42746fb1`
 The pilot completed and automatically created draft PR [#1](https://github.com/Animii/AgentLoom/pull/1), targeting `feat/pr-machine`. All three final reports passed and the chair returned no blocking disputes. Jev selected completion at 0.70 confidence (0.80 completion probability). The run used one automatic repair, plus the documented manual recovery. GitHub confirms the PR is open and draft, with only `docs/PR_MACHINE.md` changed. Published commit `f2eb5f4a0746aff1f5cccad65f4045f14fd88193` has tree `19d0854b89ba7ae5ae38057d299f2bae21818eb4`, exactly matching the stored approved tree. The completed UI survives reload and 390px layout without page errors; full evidence is retained in the run and `artifacts/real-pr-machine-completed.json`.
 
 Frozen candidate `fb1e988` verification: `5e62a8de-632a-4c79-a174-dd6ac2aec6fa` on localhost:4317 is completed. Typecheck, 136 backend tests, production build and five browser scenarios pass. Fresh recorded Linux validation also passes all four commands. All three independent reviewers and the chair return PASS, with no blocking disputes; optional coverage/usability warnings remain visible. Prior blocked verification runs are retained rather than overwritten. Merging is never automated.
+
+## Single-review PR machine and five-task pilot - 2026-09-21
+
+Candidate `a32cf08` makes PR machine the new-run default: explicit plan approval,
+Flash at max effort, recorded commands and Jev signals, one structured Astra
+review, bounded routing and automatic draft delivery for eligible worktrees.
+Existing workflows retain their configuration. An optional Fable second opinion
+preserves the original report and requires evidence to resolve disagreements.
+Review clarifications survive later repairs; unresolved findings and current
+validation remain mandatory.
+
+Final typecheck and production build pass. The exact final source passed all
+144 backend tests in an isolated Linux container with the normal parallel test
+command (`artifacts/single-review/linux-delivery-tests.log`). An earlier Windows
+run also passed 144/144. A later concurrent Windows run had short-deadline process
+failures; it is retained as a failed run, not counted as passing evidence.
+The former Linux model-catalog close-stdin fixture was corrected without changing
+production timeouts or assertions and passed ten consecutive Linux catalog runs.
+
+The full browser suite passed 26/26. Subsequent targeted coverage passed for the
+single reviewer, council, automation, and the delayed-workflow response regression.
+One publication UI timeout during concurrent backend testing passed unchanged
+when run separately; its original trace remains under
+`artifacts/single-review/ui-status-first/`. Jev settings browser checks passed
+with a deterministic upstream fixture. Real Jev calls are separately recorded
+in the live pilot.
+
+Docker Compose was rebuilt and is healthy on localhost:4317. After the final
+restart, all 190 existing run IDs, statuses and current-step positions matched
+the saved pre-deployment states. The actual deployed UI selects the PR machine
+and renders the live pilot at desktop and 390px width without page errors.
+The delayed-loading fix preserves text entered before workflows arrive.
+The temporary browser-fixture server on port 4321 was stopped.
+
+See [five-task pilot results](PR_MACHINE_PILOT_RESULTS.md) for the real providers,
+frozen source, draft PRs, manual interventions, recovery proofs and partial cost
+accounting. Pilot runs use the separate localhost:4319 server and data volumes;
+merging remains manual.

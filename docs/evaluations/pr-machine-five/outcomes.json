@@ -1,0 +1,69 @@
+{
+  "generatedAt": "2026-09-21T17:17:50.720Z",
+  "tasks": [
+    {
+      "task": 1,
+      "title": "[P1] Add a platform health CLI",
+      "pr": "https://github.com/Animii/AgentLoom/pull/5",
+      "taskTests": "16",
+      "autoRepairs": 1,
+      "manual": 3,
+      "recovery": 0,
+      "approvedMinutes": 44.1,
+      "totalMinutes": 47.9,
+      "reportedCostUsd": 0.051263
+    },
+    {
+      "task": 2,
+      "title": "[P2] Add a read-only run status CLI",
+      "pr": "https://github.com/Animii/AgentLoom/pull/3",
+      "taskTests": "21",
+      "autoRepairs": 1,
+      "manual": 1,
+      "recovery": 0,
+      "approvedMinutes": 22.6,
+      "totalMinutes": 26.3,
+      "reportedCostUsd": 0.036118
+    },
+    {
+      "task": 3,
+      "title": "[P3] Export recorded validation evidence",
+      "pr": "https://github.com/Animii/AgentLoom/pull/6",
+      "taskTests": "15",
+      "autoRepairs": 1,
+      "manual": 0,
+      "recovery": 1,
+      "approvedMinutes": 15.8,
+      "totalMinutes": 48.4,
+      "reportedCostUsd": 0.016782
+    },
+    {
+      "task": 4,
+      "title": "[P4] Check Git project readiness and repair a fault",
+      "pr": "https://github.com/Animii/AgentLoom/pull/7",
+      "taskTests": "15",
+      "autoRepairs": 2,
+      "manual": 4,
+      "recovery": 1,
+      "approvedMinutes": 70.3,
+      "totalMinutes": 72.7,
+      "reportedCostUsd": 0.165451
+    },
+    {
+      "task": 5,
+      "title": "[P5] Verify a draft PR and retry publication",
+      "pr": "https://github.com/Animii/AgentLoom/pull/4",
+      "taskTests": "14",
+      "autoRepairs": 0,
+      "manual": 1,
+      "recovery": 1,
+      "approvedMinutes": 28.5,
+      "totalMinutes": 30.9,
+      "reportedCostUsd": 0.021032
+    }
+  ],
+  "reportedAgentCostUsd": 0.290644884,
+  "costsComplete": false,
+  "operatorDecisionsAfterApproval": 9,
+  "plannedTaskRecoveryActions": 3
+}
