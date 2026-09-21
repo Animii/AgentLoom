@@ -1,6 +1,6 @@
 // An approved validation command, not an agent-authored receipt. It starts an
 // isolated copy of the exact built app, probes it, records identities, cleans up.
-import {mkdtemp,writeFile,rm} from 'node:fs/promises';
+import {mkdtemp,writeFile,rm,cp,copyFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {execFile} from 'node:child_process';
@@ -17,7 +17,9 @@ try{
  // Use the validated runtime as a dependency base and copy the run's fresh build.
  // No host bind paths, shared application data, published ports or credentials.
  await writeFile(path.join(temp,'Dockerfile'), 'FROM agentloom-reliable:pilot\nUSER root\nCOPY --chown=node:node dist /app/dist\nCOPY --chown=node:node package.json /app/package.json\nUSER node\n');
- await command(['build','-f',path.join(temp,'Dockerfile'),'-t',image,'.']);
+ await cp(path.join(root,'dist'),path.join(temp,'dist'),{recursive:true});
+ await copyFile(path.join(root,'package.json'),path.join(temp,'package.json'));
+ await command(['build','-t',image,temp]);
  await writeFile(path.join(temp,'compose.json'),JSON.stringify({services:{platform:{image,init:true,environment:{HOST:'0.0.0.0',PORT:'4317',DATA_DIR:'/data',WORKSPACE_ROOT:'/workspaces'},tmpfs:['/data:uid=1000,gid=1000','/workspaces:uid=1000,gid=1000'],healthcheck:{test:['CMD','node','-e',"fetch('http://127.0.0.1:4317/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"],interval:'1s',timeout:'3s',start_period:'2s',retries:30}}}}));
  await command([...compose,'up','-d','--wait','--wait-timeout','90']);
  const id=(await command([...compose,'ps','-q','platform'])).stdout.trim();
