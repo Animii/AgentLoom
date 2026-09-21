@@ -7,10 +7,10 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {setTimeout as delay} from 'node:timers/promises';
 import {createApp} from '../src/server/app.js';
-import {councilWorkflow} from '../src/server/templates.js';
+import {councilWorkflow,singleReviewWorkflow} from '../src/server/templates.js';
 import type {Run} from '../src/shared/types.js';
 const exec=promisify(execFile);
-async function fixture(options:{repair?:boolean;alwaysBroken?:boolean;confidence?:number;publishFails?:boolean;failReview?:boolean;missingEvidence?:boolean;beforeDecision?:()=>Promise<void>}={}){
+async function fixture(options:{single?:boolean;repair?:boolean;alwaysBroken?:boolean;confidence?:number;publishFails?:boolean;failReview?:boolean;missingEvidence?:boolean;beforeDecision?:()=>Promise<void>}={}){
  const root=await mkdtemp(path.join(tmpdir(),'loom-auto-'));const source=path.join(root,'projects','fixture');await mkdir(source,{recursive:true});
  const git=(args:string[])=>exec('git',args,{cwd:source,windowsHide:true});
  await git(['init','-b','main']);await git(['config','user.name','Fixture']);await git(['config','user.email','fixture@example.invalid']);await writeFile(path.join(source,'app.txt'),'original');await git(['add','.']);await git(['commit','-m','Initial']);await git(['remote','add','origin','https://github.com/fixture/project.git']);
@@ -25,9 +25,9 @@ async function fixture(options:{repair?:boolean;alwaysBroken?:boolean;confidence
    if(options.failReview&&step.id==='council-product')throw Error('Required provider unavailable');
    if(options.missingEvidence&&step.id==='council-product')return {output:JSON.stringify({verdict:'NEEDS_EVIDENCE',summary:'Required observation unavailable.',criteria:[{id:'AC1',status:'unknown',evidence:['No usable observation.']}],findings:[],resolutions:[]}),sessionId:null,costUsd:null};
    const broken=options.alwaysBroken||options.repair&&builds===1;
-   return {output:JSON.stringify({verdict:broken?'BLOCKED':'PASS',summary:broken?'Value is wrong.':'Value verified.',criteria:[{id:'AC1',status:broken?'unmet':'met',evidence:['app.txt:1 and recorded check']}],findings:broken?[{id:'F1',criterion:'AC1',severity:'blocker',summary:'Set the value to fixed.',evidence:['app.txt:1 is broken']}]:[],resolutions:builds>1?[{findingId:'F1',evidence:'app.txt is fixed; recorded assertion passes.'}]:[]}),sessionId:null,costUsd:null};
+   return {output:JSON.stringify({verdict:broken?'BLOCKED':'PASS',summary:broken?'Value is wrong.':'Value verified.',criteria:[{id:'AC1',status:broken?'unmet':'met',evidence:['app.txt:1 and recorded check']},...(options.single?[{id:'SCOPE',status:'met',evidence:['Only app.txt changed.']}]:[])],findings:broken?[{id:'F1',criterion:'AC1',severity:'blocker',summary:'Set the value to fixed.',evidence:['app.txt:1 is broken']}]:[],resolutions:builds>1?[{findingId:'F1',evidence:'app.txt is fixed; recorded assertion passes.'}]:[]}),sessionId:null,costUsd:null};
   }});
- const workflow=structuredClone(councilWorkflow);workflow.steps[2].validation!.commands=[{executable:process.execPath,args:['-e',"process.exit(require('fs').readFileSync('app.txt','utf8')==='fixed'?0:1)"],timeoutMs:3000}];app.store.saveWorkflow(workflow);
+ const workflow=structuredClone(options.single?singleReviewWorkflow:councilWorkflow);workflow.steps[2].validation!.commands=[{executable:process.execPath,args:['-e',"process.exit(require('fs').readFileSync('app.txt','utf8')==='fixed'?0:1)"],timeoutMs:3000}];app.store.saveWorkflow(workflow);
  await app.inject({method:'PUT',url:'/api/jev/settings',payload:{apiKey:'fixture-automation-key'}});
  const project=(await app.inject({method:'POST',url:'/api/projects',payload:{name:'Fixture',folder:'fixture',workspaceMode:'worktree'}})).json();
  const run=await app.engine.create({title:'Automated fix',task:'AC1: set app.txt to fixed.',project:project.id,workflowId:workflow.id,mode:'live',automation:{publication:'draft'}});
@@ -76,4 +76,11 @@ test('server restart pauses authorized automation without rerunning agents',asyn
 test('source edited while Jev is deciding cannot trigger a stale automatic repair',async()=>{
  let entered!:()=>void,release!:()=>void;const checking=new Promise<void>(resolve=>{entered=resolve;});const gate=new Promise<void>(resolve=>{release=resolve;});const f=await fixture({alwaysBroken:true,beforeDecision:async()=>{entered();await gate;}});
  try{await f.wait(r=>r.status==='waiting_approval');await f.app.engine.approveCurrent(f.run.id);await checking;await writeFile(path.join(f.app.store.getRun(f.run.id)!.workspace,'app.txt'),'user changed source');release();const paused=await f.wait(r=>r.automation?.status==='paused');assert.match(paused.automation!.message,/Source changed after review/);assert.equal(paused.automation!.repairsUsed,0);assert.equal(f.builds(),1);assert.equal(f.publishes(),0);}finally{release();await f.close();}
+});
+
+test('single reviewer repairs once and publishes with no chair invocation',async()=>{
+ const f=await fixture({single:true,repair:true});try{await f.wait(r=>r.status==='waiting_approval');await f.app.engine.approveCurrent(f.run.id);const done=await f.wait(r=>r.automation?.status==='done');assert.equal(done.automation?.repairsUsed,1);assert.equal(done.steps[3].council?.reviewers.length,1);assert.equal(done.steps[3].council?.chair,undefined);assert.equal(done.steps[3].council?.reviewers[0].report?.resolutions[0].findingId,'F1');assert.equal(f.publishes(),1);assert.equal(done.steps[2].validation?.status,'passed');}finally{await f.close();}
+});
+test('single review retains two-repair limit and unresolved finding after failed fixes',async()=>{
+ const f=await fixture({single:true,alwaysBroken:true});try{await f.wait(r=>r.status==='waiting_approval');await f.app.engine.approveCurrent(f.run.id);const stopped=await f.wait(r=>r.automation?.status==='paused'&&r.automation.repairsUsed===2);assert.equal(f.builds(),3);assert.equal(f.publishes(),0);assert.equal(stopped.status,'blocked');assert.equal(stopped.steps[3].council?.reviewers[0].report?.findings[0].id,'F1');}finally{await f.close();}
 });

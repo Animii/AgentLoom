@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import type {Run} from '../shared/types.js';
-import {councilReviews} from '../shared/council.js';
+import {councilReviews,reviewEvidenceComplete} from '../shared/council.js';
 import type {Store} from './store.js';
 import type {Engine} from './engine.js';
 import type {registerJev} from './jev.js';
@@ -47,7 +47,7 @@ export class Automation {
   const step=run.steps[run.currentStep];
   if(!['blocked','waiting_approval'].includes(run.status)||!step?.council)throw Error('This step needs your input or recovery.');
   const evidence=step.council;
-  const reviewsComplete=councilReviews(evidence).length===3&&councilReviews(evidence).every(r=>r.status==='completed'&&!!r.report&&r.report.verdict!=='NEEDS_EVIDENCE'&&!r.report.criteria.some(c=>c.status==='unknown'))&&(evidence.challenge?.chair??evidence.chair)?.status==='completed';
+  const reviewsComplete=reviewEvidenceComplete(evidence,step.definition);
   const state={authorization:{contractHash:policy.contractHash,controllerMayComplete:true,maxRepairs:policy.maxRepairs,repairsUsed:policy.repairsUsed},task:run.task,plan:run.steps[0].output,validation:run.steps.filter(s=>s.validation).map(s=>({stepId:s.definition.id,attempt:s.attempt,status:s.validation!.status,before:s.validation!.before,after:s.validation!.after,signals:s.validation!.signals,commands:s.validation!.commands.map(c=>({command:c.command,status:c.status,exitCode:c.exitCode,outputTail:c.output.slice(c.status==='passed'?-500:-2000),fullOutputRecorded:true}))})),council:{status:evidence.status,source:evidence.source,issues:evidence.issues,reviews:councilReviews(evidence).map(r=>({status:r.status,report:r.report})),chair:(()=>{const chair=evidence.challenge?.chair??evidence.chair;return chair?{status:chair.status,summary:chair.summary,disputes:chair.disputes}:undefined;})()}};
   if(JSON.stringify(state).length>30000)throw Error('Evidence exceeds the routing budget. Review this outcome manually.');
   policy.status='deciding';policy.message='Jev is assessing the recorded evidence.';this.store.saveRun(run);

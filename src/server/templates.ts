@@ -157,3 +157,12 @@ councilWorkflow.steps[3] = {
   ]},
 };
 initialWorkflows.push(councilWorkflow);
+
+// A new template avoids changing existing runs or user-edited workflows.
+export const singleReviewWorkflow: Workflow = {
+ ...structuredClone(evidenceWorkflow), id:'single-review-delivery', name:'PR machine',
+ description:'Approved task, Flash implementation, recorded tests, one Astra review and bounded Jev routing. Optional second opinion; merging remains manual.',
+};
+singleReviewWorkflow.steps[0].instructions += ' Assign explicit stable acceptance IDs AC1, AC2, etc. Define scope and exact tests. The final reviewer must account for every approved criterion and SCOPE.';
+singleReviewWorkflow.steps[3] = {...singleReviewWorkflow.steps[3],name:'Independent review',instructions:'Inspect the approved criteria, scope, changed source and recorded validation independently. Report concrete blockers with reproducible evidence or NEEDS_EVIDENCE for missing checks. Preserve source. Optional suggestions are warnings. Delivery follows the approved run policy; this report is evidence, not authorization.',council:{reviewers:[{id:'correctness',name:'Astra review',focus:'Independently inspect all approved criteria, source changes, recorded tests, edge cases and scope. Report only concrete in-scope defects; optional suggestions are warnings.',provider:'codex',model:'gpt-6-astra',effort:'high'}],secondOpinion:{id:'second-opinion',name:'Fable second opinion',focus:'Independently assess the approved criteria and disputed outcome. Seek reproducible counterexamples, preserve scope and separate optional suggestions from blockers.',provider:'claude',model:'claude-fable-5-1',effort:'high'}}};
+initialWorkflows.unshift(singleReviewWorkflow);

@@ -1,0 +1,28 @@
+name: agentloom-five-task-pilot
+services:
+  platform:
+    image: agentloom-single-review:pilot
+    build: ../..
+    container_name: agentloom-jev-routing-pilot
+    init: true
+    command: [node, /pilot/pr-machine-server.mjs]
+    security_opt: [seccomp:unconfined, apparmor:unconfined]
+    environment:
+      AGENTLOOM_LIVE_PILOT: five-tasks
+    ports: ["127.0.0.1:4319:4317"]
+    volumes:
+      - .:/pilot:ro
+      - pilot_data:/data
+      - pilot_work:/workspaces
+      - agent_home:/home/node
+    stop_grace_period: 20s
+volumes:
+  pilot_data:
+    external: true
+    name: agentloom_jev_pilot_data
+  pilot_work:
+    external: true
+    name: agentloom_jev_pilot_work
+  agent_home:
+    external: true
+    name: agentloom_agent_home
