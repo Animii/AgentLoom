@@ -1,0 +1,183 @@
+{
+  "recordedAt": "2026-09-21T17:21:25.317Z",
+  "finalCandidate": "a32cf08",
+  "checks": [
+    {
+      "command": "npm run typecheck",
+      "status": "passed",
+      "environment": "Windows",
+      "localLog": "artifacts/single-review/typecheck-load-fix.log",
+      "sha256": "901de8b94bf5e7c2747dfd0ad8415de18921b228a9d99482da2ec77e12a0592a",
+      "nodeTotals": {
+        "tests": null,
+        "passed": null,
+        "failed": null
+      },
+      "browserResult": null
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "environment": "Windows",
+      "localLog": "artifacts/single-review/build-load-fix.log",
+      "sha256": "226b32f7956dd5c4fe3c7f54d3be6781420ede0e5a7a5109e8efd8ddc8e6447f",
+      "nodeTotals": {
+        "tests": null,
+        "passed": null,
+        "failed": null
+      },
+      "browserResult": null
+    },
+    {
+      "command": "npm test",
+      "status": "passed",
+      "environment": "isolated Linux",
+      "localLog": "artifacts/single-review/linux-delivery-tests.log",
+      "sha256": "edb8a1e12fb266a2e4e75894cc388db2c0612f2ccd8b0a8acbe135bc916327f2",
+      "nodeTotals": {
+        "tests": 144,
+        "passed": 144,
+        "failed": 0
+      },
+      "browserResult": null
+    },
+    {
+      "command": "full Playwright suite",
+      "status": "passed",
+      "environment": "Windows",
+      "localLog": "artifacts/single-review/ui-full-rerun.log",
+      "sha256": "0993fff56f9d0e18b8a8bb6ed2fe316ef83ed4e82ac9f61af042c65ee67c6f63",
+      "nodeTotals": {
+        "tests": null,
+        "passed": null,
+        "failed": null
+      },
+      "browserResult": "26 passed (2.0m)"
+    },
+    {
+      "command": "targeted review/council/automation browser tests",
+      "status": "failed",
+      "environment": "Windows, concurrent backend run",
+      "localLog": "artifacts/single-review/ui-status-final.log",
+      "sha256": "39a6e2383cfac5723ed4e3bd7c39924a31e91b6d52b0d771978cf4166f16441e",
+      "nodeTotals": {
+        "tests": null,
+        "passed": null,
+        "failed": null
+      },
+      "browserResult": "3 passed (44.8s)"
+    },
+    {
+      "command": "unchanged automation browser scenario",
+      "status": "passed",
+      "environment": "Windows, separate rerun",
+      "localLog": "artifacts/single-review/ui-status-retry.log",
+      "sha256": "294c0ed246873af8d252106e95be060476ab69e852df5dbde5aa6ef5bb2edca5",
+      "nodeTotals": {
+        "tests": null,
+        "passed": null,
+        "failed": null
+      },
+      "browserResult": "1 passed (21.0s)"
+    },
+    {
+      "command": "delayed workflows and single-review browser scenario",
+      "status": "passed",
+      "environment": "Windows",
+      "localLog": "artifacts/single-review/ui-load-fix.log",
+      "sha256": "d28d870706e5869853b9d490e5e5608dbaa13c859259779240cb440b82579775",
+      "nodeTotals": {
+        "tests": null,
+        "passed": null,
+        "failed": null
+      },
+      "browserResult": "1 passed (5.5s)"
+    },
+    {
+      "command": "Jev settings browser test",
+      "status": "passed",
+      "environment": "Windows, deterministic upstream fixture",
+      "localLog": "artifacts/single-review/jev-ui.log",
+      "sha256": "e0611ae269c2f7868f923e757e2640cb9a005dee1fb467195569ddc1849533d7",
+      "nodeTotals": {
+        "tests": null,
+        "passed": null,
+        "failed": null
+      },
+      "browserResult": null
+    },
+    {
+      "command": "npm test (earlier candidate)",
+      "status": "passed",
+      "environment": "Windows",
+      "localLog": "artifacts/single-review/full-tests-final-parallel.log",
+      "sha256": "bb01172c9b581db667b693f7f97cf2abc77db0b7973f8ff094a8d1fc136644f3",
+      "nodeTotals": {
+        "tests": 144,
+        "passed": 144,
+        "failed": 0
+      },
+      "browserResult": null
+    },
+    {
+      "command": "npm test (concurrent rerun)",
+      "status": "failed",
+      "environment": "Windows, concurrent compilation/browser work",
+      "localLog": "artifacts/single-review/backend-final.log",
+      "sha256": "007ccfac7628af92aeb3140dc7287bb9ad051c8c48794d3da7b444322311559b",
+      "nodeTotals": {
+        "tests": 144,
+        "passed": 133,
+        "failed": 11
+      },
+      "browserResult": null
+    }
+  ],
+  "catalogFixtureStress": [
+    {
+      "trial": 1,
+      "exitCode": 0
+    },
+    {
+      "trial": 2,
+      "exitCode": 0
+    },
+    {
+      "trial": 3,
+      "exitCode": 0
+    },
+    {
+      "trial": 4,
+      "exitCode": 0
+    },
+    {
+      "trial": 5,
+      "exitCode": 0
+    },
+    {
+      "trial": 6,
+      "exitCode": 0
+    },
+    {
+      "trial": 7,
+      "exitCode": 0
+    },
+    {
+      "trial": 8,
+      "exitCode": 0
+    },
+    {
+      "trial": 9,
+      "exitCode": 0
+    },
+    {
+      "trial": 10,
+      "exitCode": 0
+    }
+  ],
+  "notes": [
+    "Full browser suite preceded the final status-copy and delayed-workflow changes; targeted browser coverage verifies those final changes.",
+    "Failed concurrent Windows reruns remain failures. Final full backend verification passed in isolated Linux without relaxed deadlines/assertions.",
+    "Live pilot calls used real providers and Jev. Jev settings browser checks used a deterministic upstream fixture."
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "at": "2026-09-21T17:17:27.955Z",
+  "task": 4,
+  "runId": "7aa53c93-afce-43d7-a6f4-e59713e61e90",
+  "exitCode": 0,
+  "result": {
+    "ready": true,
+    "branch": "feat/single-reviewer-pr-machine",
+    "commit": "550761e1d43c2c4b2a49dd6ca4d8d74ff421cddc",
+    "repository": "Animii/AgentLoom",
+    "issues": []
+  },
+  "sourceStatusUnchanged": true,
+  "passed": true
+}

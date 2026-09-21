@@ -1,0 +1,47 @@
+{
+  "at": "2026-09-21T16:45:15.164Z",
+  "runtimeCommit": "88faf8f",
+  "stoppedSource": [
+    {
+      "id": "6764235c-d1dd-4741-9dce-5aef7143c202",
+      "fingerprint": "045ec1d437dad9ae607c260635812938a09c5cbb659bea09a313478a64ad868f",
+      "files": 138
+    },
+    {
+      "id": "7aa53c93-afce-43d7-a6f4-e59713e61e90",
+      "fingerprint": "3c9e6f0675f4750747a9add7c4860986bf28f803767934ce2ddd05d538d222fa",
+      "files": 138
+    }
+  ],
+  "restartedSource": [
+    {
+      "id": "6764235c-d1dd-4741-9dce-5aef7143c202",
+      "fingerprint": "045ec1d437dad9ae607c260635812938a09c5cbb659bea09a313478a64ad868f",
+      "files": 138
+    },
+    {
+      "id": "7aa53c93-afce-43d7-a6f4-e59713e61e90",
+      "fingerprint": "3c9e6f0675f4750747a9add7c4860986bf28f803767934ce2ddd05d538d222fa",
+      "files": 138
+    }
+  ],
+  "interruptedSteps": [
+    {
+      "id": "6764235c-d1dd-4741-9dce-5aef7143c202",
+      "step": "build",
+      "attempt": 1,
+      "repairsUsed": 0
+    },
+    {
+      "id": "7aa53c93-afce-43d7-a6f4-e59713e61e90",
+      "step": "review",
+      "attempt": 4,
+      "repairsUsed": 2
+    }
+  ],
+  "completedRunsUnchanged": [
+    "97c4778e-0ff7-4053-aa74-280f81ab4e1d",
+    "552a1753-0612-418b-80e4-4d6ef1316510"
+  ],
+  "passed": true
+}

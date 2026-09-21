@@ -1,0 +1,90 @@
+{
+  "at": "2026-09-21T17:17:41.244Z",
+  "results": [
+    {
+      "task": 1,
+      "runId": "2663e09e-29e4-4957-ab3d-904efea7bbb0",
+      "url": "https://github.com/Animii/AgentLoom/pull/5",
+      "isDraft": true,
+      "state": "OPEN",
+      "base": "feat/single-reviewer-pr-machine",
+      "head": "07fcf8448c5b32969b4a49499445202d318c315a",
+      "approvedTree": "e8c981486395e4224be166d39929163009c0d188",
+      "files": [
+        "docs/tools/check-platform.md",
+        "scripts/check-platform.mjs",
+        "tests/check-platform-cli.test.mjs"
+      ],
+      "uniquePr": true,
+      "passed": true
+    },
+    {
+      "task": 2,
+      "runId": "97c4778e-0ff7-4053-aa74-280f81ab4e1d",
+      "url": "https://github.com/Animii/AgentLoom/pull/3",
+      "isDraft": true,
+      "state": "OPEN",
+      "base": "feat/single-reviewer-pr-machine",
+      "head": "8654e37498e708cc7fbe82167d8d0b10ea64ae13",
+      "approvedTree": "b33c49a0cd67c2f3776d0665f809937485d5b66e",
+      "files": [
+        "docs/tools/run-status.md",
+        "scripts/run-status.mjs",
+        "tests/run-status-cli.test.mjs"
+      ],
+      "uniquePr": true,
+      "passed": true
+    },
+    {
+      "task": 3,
+      "runId": "6764235c-d1dd-4741-9dce-5aef7143c202",
+      "url": "https://github.com/Animii/AgentLoom/pull/6",
+      "isDraft": true,
+      "state": "OPEN",
+      "base": "feat/single-reviewer-pr-machine",
+      "head": "2be202c016b6f59f9a6778bcf0c463a315c9e15b",
+      "approvedTree": "6fe4f3fc2b18798893e5ac1f538116f23b67da35",
+      "files": [
+        "docs/tools/export-validation.md",
+        "scripts/export-validation.mjs",
+        "tests/export-validation-cli.test.mjs"
+      ],
+      "uniquePr": true,
+      "passed": true
+    },
+    {
+      "task": 4,
+      "runId": "7aa53c93-afce-43d7-a6f4-e59713e61e90",
+      "url": "https://github.com/Animii/AgentLoom/pull/7",
+      "isDraft": true,
+      "state": "OPEN",
+      "base": "feat/single-reviewer-pr-machine",
+      "head": "01e1263c74943bf78508e6cc69956922baff862b",
+      "approvedTree": "cdf91666f537139560b8032b8cefda9173ce4e45",
+      "files": [
+        "docs/tools/check-git-project.md",
+        "scripts/check-git-project.mjs",
+        "tests/check-git-project-cli.test.mjs"
+      ],
+      "uniquePr": true,
+      "passed": true
+    },
+    {
+      "task": 5,
+      "runId": "552a1753-0612-418b-80e4-4d6ef1316510",
+      "url": "https://github.com/Animii/AgentLoom/pull/4",
+      "isDraft": true,
+      "state": "OPEN",
+      "base": "feat/single-reviewer-pr-machine",
+      "head": "f9f52c38550914b463a2a0abba31ec4845cde8f3",
+      "approvedTree": "019e0f12f4807b3c9b710d9dadb9925d3c9d7338",
+      "files": [
+        "docs/tools/verify-draft.md",
+        "scripts/verify-draft.mjs",
+        "tests/verify-draft-cli.test.mjs"
+      ],
+      "uniquePr": true,
+      "passed": true
+    }
+  ]
+}
