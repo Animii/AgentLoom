@@ -85,6 +85,32 @@ test('late catalogs, provider switches and refresh never overwrite the saved sel
  }finally{open();await page.goto('about:blank');await stopApp(app,root);}
 });
 
+test('optional second opinion uses provider suggestions and survives edits to the primary reviewer',async({page})=>{
+ const {app,root,address}=await startApp(async()=>{},()=>false);
+ try{
+  await page.goto(`${address}/?view=workflows&workflow=single-review-delivery`);
+  const step=page.locator('.wf-step').nth(3);await step.locator('summary').click();
+  const second=step.getByRole('combobox',{name:'Second reviewer model',exact:true});
+  await second.click();await expect(step.getByRole('listbox')).toContainText('sonnet');
+  await expect(step.getByRole('listbox')).not.toContainText('CLI default');
+  await step.getByRole('option').filter({hasText:'opus'}).click();
+  const primary=step.getByRole('combobox',{name:'Reviewer model',exact:true});
+  await primary.click();await primary.fill('gpt-5.6-sol');await primary.press('Enter');
+  await expect(second).toHaveValue('opus');
+  await step.getByRole('combobox',{name:'Second reviewer provider',exact:true}).selectOption('opencode');
+  await expect(second).toHaveValue('');await expect(step.getByLabel('Second reviewer effort')).toHaveValue('');
+  await second.click();await expect(step.getByRole('listbox')).toContainText('deepseek/deepseek-flash');
+  await second.fill('acme/custom-second');await step.getByRole('option').filter({hasText:'Use custom model'}).click();
+  await page.getByRole('button',{name:'Save workflow',exact:true}).click();await expect(page.locator('.wf-message[role=status]')).toContainText(/saved/i);
+  await page.reload();await step.locator('summary').click();await expect(second).toHaveValue('acme/custom-second');await expect(primary).toHaveValue('gpt-5.6-sol');
+  await second.click();await expect(step.getByRole('listbox')).toContainText('acme/custom-second');
+  const ids=await step.getByRole('combobox').evaluateAll(elements=>elements.map(e=>e.getAttribute('aria-controls')).filter(Boolean));expect(new Set(ids).size).toBe(ids.length);
+  await step.getByRole('combobox',{name:'Second reviewer provider',exact:true}).selectOption('claude');
+  expect(await second.evaluate(element=>(element as HTMLInputElement).validity.valueMissing)).toBe(true);
+  expect(app.store.getWorkflow('single-review-delivery').steps[3].council.secondOpinion.model).toBe('acme/custom-second');
+ }finally{await page.goto('about:blank');await stopApp(app,root);}
+});
+
 test('council reviewer fields offer their provider suggestions and keep models explicit',async({page})=>{
  const {app,root,address}=await startApp(async()=>{},()=>false);
  try{
