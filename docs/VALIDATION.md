@@ -149,3 +149,45 @@ See [five-task pilot results](PR_MACHINE_PILOT_RESULTS.md) for the real provider
 frozen source, draft PRs, manual interventions, recovery proofs and partial cost
 accounting. Pilot runs use the separate localhost:4319 server and data volumes;
 merging remains manual.
+
+## Reliable evidence handoffs and bounded rescue - 2026-09-21
+
+Candidate `501933b` supplies immutable recorded evidence packets to implementers
+and reviewers, limits Jev to eligible actions, and supports one explicitly
+preapproved Fable rescue after two Flash repairs with independent Astra review.
+The live pilot exposed and prompted fixes for a timing-dependent cancellation
+test and missing ordinary interrupted-attempt history on retry.
+
+Typecheck and production build pass. All **150 backend tests pass** in an
+isolated Linux container with the normal parallel test command
+(`artifacts/reliable-delivery/history-backend-tests.log`). The new recovery
+regression verifies retained partial files, transcript, tools, timestamps,
+provider identity and unknown cost after shutdown, restart and retry.
+
+The full browser run passed 25/26 cases. The failed workspace-recovery case used
+an incorrect fixture workspace path; it passed unchanged when the test and
+server paths matched. Both logs and the original trace are retained. The compact
+rescue checkbox passed desktop/mobile visual checks. Jev key save, persistence,
+connection, all three evaluation types and removal passed with a deterministic
+upstream fixture. Real Jev routing is separately recorded in the live pilot.
+
+The final deployed browser checks pass for new-run defaults and the 16px rescue
+checkbox, the completed rescue and draft link, refresh-retained run selection,
+390px layout without horizontal overflow, and no page errors. They create no
+run or provider call (`artifacts/reliable-delivery/live-ui.json`).
+
+Docker Compose is healthy on localhost:4317 using image
+`sha256:e19486a5c095a224ae61d6db5f48812c56a924f9821574abcaf1de37e05d7f11`.
+All 190 existing run identities, statuses, current-step positions, automation
+states and PR links matched before and after deployment. Separate pilot data,
+old results and other research files were preserved.
+
+The [five new live deliveries](RELIABLE_DELIVERY_RESULTS.md) all have passing
+recorded focused tests, typecheck, the frozen 149-test baseline, build, Compose
+receipts and independent Astra reviews. Remote trees and exact three-file scope
+were verified before this feature PR. There was one unplanned operator approval
+and two planned recovery actions; zero unplanned interventions was not achieved.
+The frozen pilot keeps its original failures. The interrupted attempt omitted
+by its old runtime is retained as a supplemental operator-snapshot record rather
+than silently rewriting the live run. Flash, Fable and unknown costs are reported
+separately in the versioned evidence.
