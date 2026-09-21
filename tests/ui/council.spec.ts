@@ -33,7 +33,13 @@ test('council shows independent findings, focused challenge, reload and human ap
     await page.screenshot({ path: 'artifacts/council-mobile.png', fullPage: true });
     await page.getByRole('button', { name: 'Approve and continue', exact: true }).click(); await expect(page.locator('.detail-status .status-completed')).toBeVisible();
     await page.setViewportSize({ width: 1440, height: 1000 }); await page.goto(`${address}/?view=workflows&workflow=council-delivery`); await page.locator('.wf-step summary').nth(3).click();
-    await expect(page.getByLabel('Reviewer model', { exact: true })).toHaveCount(3); await page.getByLabel('Reviewer model', { exact: true }).nth(2).fill('gpt-6-astra'); await page.getByRole('button', { name: 'Save workflow', exact: true }).click(); await expect(page.locator('.wf-message[role=status]')).toContainText('Saved');
+    await expect(page.getByLabel('Reviewer model', { exact: true })).toHaveCount(3);
+    const reviewerModel = page.getByLabel('Reviewer model', { exact: true }).nth(2);
+    await reviewerModel.click(); await reviewerModel.fill('gpt-6-astra');
+    await page.locator('.wf-step').nth(3).getByRole('option').filter({hasText:'Use custom model'}).click();
+    await expect(reviewerModel).toHaveValue('gpt-6-astra');
+    await page.getByRole('button', { name: 'Save workflow', exact: true }).click(); await expect(page.locator('.wf-message[role=status]')).toContainText('Saved');
+    expect(app.store.getWorkflow('council-delivery').steps[3].council!.reviewers[2].model).toBe('gpt-6-astra');
   } finally { await page.goto('about:blank').catch(() => {}); app.server.closeAllConnections(); await app.close(); await rm(root, { recursive: true, force: true, maxRetries: 10 }); }
 });
 
