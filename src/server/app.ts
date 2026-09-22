@@ -17,6 +17,7 @@ import { registerRunStream } from './run-stream.js';
 import { registerProjectImports } from './project-import.js';
 import { Projects, registerProjects } from './projects.js';
 import { registerJev } from './jev.js';
+import { registerMcp } from './mcp.js';
 import { createExecutor, getProviders } from './providers.js';
 import { Store } from './store.js';
 import { listDirectoryFiles, listRunFiles, readDirectoryFile, readRunFile } from './workspaces.js';
@@ -114,7 +115,7 @@ const stepDefinitionSchema = z
     }
   });
 
-const workflowSchema = z
+export const workflowSchema = z
   .strictObject({
     id: idField,
     name: nameField,
@@ -423,6 +424,7 @@ export async function createApp(config: AppConfig, options: CreateAppOptions = {
   });
 
   registerProjects(app, projects);
+  registerMcp(app, workflowSchema, VERSION);
 
   let providersCache: { expiresAt: number; value: ProviderInfo[] } | null = null;
   app.get('/api/providers', async () => {
