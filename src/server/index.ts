@@ -24,14 +24,21 @@ function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
   return typeof error === 'object' && error !== null && 'code' in error;
 }
 
-function readIntegerEnv(name: string, fallback: number, min: number, max: number): number {
+function readIntegerEnv(
+  name: string,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
   const raw = process.env[name];
   if (raw === undefined || raw.trim().length === 0) {
     return fallback;
   }
   const value = Number(raw.trim());
   if (!Number.isSafeInteger(value) || value < min || value > max) {
-    throw new Error(`${name} must be an integer between ${min} and ${max}`);
+    throw new Error(
+      `${name} must be an integer between ${String(min)} and ${String(max)}`,
+    );
   }
   return value;
 }
@@ -72,12 +79,33 @@ function readConfig(): AppConfig {
   const config: AppConfig = {
     dataDir: readPathEnv('DATA_DIR', resolve('.data')),
     workspaceRoot: readPathEnv('WORKSPACE_ROOT', resolve('workspaces')),
-    ...(process.env.PROJECTS_ROOT ? { projectRoot: resolve(process.env.PROJECTS_ROOT), projectHostRoot: process.env.PROJECTS_HOST_ROOT ?? process.env.PROJECTS_ROOT } : {}),
+    ...(process.env.PROJECTS_ROOT
+      ? {
+          projectRoot: resolve(process.env.PROJECTS_ROOT),
+          projectHostRoot:
+            process.env.PROJECTS_HOST_ROOT ?? process.env.PROJECTS_ROOT,
+        }
+      : {}),
     port: readIntegerEnv('PORT', DEFAULT_PORT, 1, 65535),
     host: readHostEnv(),
-    cliTimeoutMs: readIntegerEnv('CLI_TIMEOUT_MS', DEFAULT_CLI_TIMEOUT_MS, 1000, 86_400_000),
-    cliIdleTimeoutMs: readIntegerEnv('CLI_IDLE_TIMEOUT_MS', 600_000, 0, 86_400_000),
-    maxOutputBytes: readIntegerEnv('MAX_OUTPUT_BYTES', DEFAULT_MAX_OUTPUT_BYTES, 1, Number.MAX_SAFE_INTEGER),
+    cliTimeoutMs: readIntegerEnv(
+      'CLI_TIMEOUT_MS',
+      DEFAULT_CLI_TIMEOUT_MS,
+      1000,
+      86_400_000,
+    ),
+    cliIdleTimeoutMs: readIntegerEnv(
+      'CLI_IDLE_TIMEOUT_MS',
+      600_000,
+      0,
+      86_400_000,
+    ),
+    maxOutputBytes: readIntegerEnv(
+      'MAX_OUTPUT_BYTES',
+      DEFAULT_MAX_OUTPUT_BYTES,
+      1,
+      Number.MAX_SAFE_INTEGER,
+    ),
   };
   const binaries = readBinaries();
   if (Object.keys(binaries).length > 0) {
@@ -96,7 +124,10 @@ async function ensureWelcomeProject(workspaceRoot: string): Promise<void> {
   const welcomeDirectory = join(projectsDirectory, 'welcome');
   await mkdir(welcomeDirectory);
   try {
-    await writeFile(join(welcomeDirectory, 'README.md'), WELCOME_README, { encoding: 'utf8', flag: 'wx' });
+    await writeFile(join(welcomeDirectory, 'README.md'), WELCOME_README, {
+      encoding: 'utf8',
+      flag: 'wx',
+    });
   } catch (error) {
     if (!isErrnoException(error) || error.code !== 'EEXIST') {
       throw error;
@@ -131,7 +162,9 @@ async function main(): Promise<void> {
   });
   try {
     await app.listen({ port: config.port, host: config.host });
-    app.log.info(`AgentLoom listening on http://${config.host}:${config.port}`);
+    app.log.info(
+      `AgentLoom listening on http://${config.host}:${String(config.port)}`,
+    );
   } catch (error) {
     console.error(`Failed to start AgentLoom: ${errorMessage(error)}`);
     process.exitCode = 1;

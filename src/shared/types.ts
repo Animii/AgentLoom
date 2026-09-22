@@ -1,31 +1,305 @@
 import type { CouncilEvidence, CouncilMember } from './council.js';
+import type { CrateState } from './crates.js';
 export type ProviderId = 'claude' | 'codex' | 'opencode';
-export type RunStatus = 'queued' | 'running' | 'waiting_input' | 'waiting_approval' | 'blocked' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
-export type StepStatus = 'pending' | 'running' | 'waiting_input' | 'waiting_approval' | 'blocked' | 'completed' | 'failed' | 'cancelled';
-export interface ValidationCommand { executable: string; args: string[]; timeoutMs: number }
-export interface ValidationResult { command: ValidationCommand; status: "running" | "passed" | "failed" | "timed_out" | "cancelled"; exitCode: number | null; output: string; truncated: boolean; startedAt: string; finishedAt?: string }
-export interface ValidationSignals { status: "ready" | "failed" | "unavailable" | "simulated"; model?: string; message?: string; claimsSupported?: number; scopeDrift?: number; needsHuman?: number }
-export interface ValidationEvidence { attempt: number; status: "running" | "passed" | "failed" | "simulated"; before: string; after?: string; commands: ValidationResult[]; signals?: ValidationSignals; startedAt: string; finishedAt?: string }
-export interface StepDefinition { council?: { reviewers: CouncilMember[]; secondOpinion?: CouncilMember }; validation?: { commands: ValidationCommand[] }; id: string; name: string; role: string; provider: ProviderId; model: string; effort: string; instructions: string; access: 'read-only' | 'workspace-write'; approval: boolean; planning?: boolean }
-export interface Workflow { id: string; name: string; description: string; steps: StepDefinition[]; updatedAt: string }
-export interface PlanningQuestion { question: string; header?: string; multiSelect?: boolean; options?: (string | { label: string; description?: string; recommended?: boolean })[] }
-export interface PlanningMessage { id: string; role: 'user' | 'assistant'; content: string; createdAt: string; questions?: PlanningQuestion[] }
-export interface PlanningToolCall { outputOffset?: number; id: string; name: string; status: 'running' | 'completed' | 'failed' | 'unknown'; input: Record<string, string | number | boolean>; summary?: string; startedAt: string; finishedAt?: string; turnId?: string }
-export interface AgentExecution { provider: ProviderId; model: string; effort: string; reason?: 'escalation' }
-export interface StepAttempt { execution?: AgentExecution; council?: CouncilEvidence; validation?: ValidationEvidence; conversation?: PlanningMessage[]; toolCalls?: PlanningToolCall[]; attempt: number; status: StepStatus; output: string; error: string | null; feedback: string; startedAt: string | null; finishedAt: string | null; costUsd: number | null }
-export interface ReviewAssessment { status: 'running' | 'ready' | 'unavailable' | 'failed'; attempt: number; output: string; category?: 'code_fix' | 'missing_requirement' | 'environment' | 'mixed' | 'no_blocker' | 'unclear'; confidence?: number; model?: string; message?: string; createdAt: string }
-export interface StepRun { execution?: AgentExecution; council?: CouncilEvidence; validation?: ValidationEvidence; assessment?: ReviewAssessment; history?: StepAttempt[]; definition: StepDefinition; status: StepStatus; attempt: number; output: string; error: string | null; sessionId: string | null; feedback: string; startedAt: string | null; finishedAt: string | null; costUsd: number | null; conversation?: PlanningMessage[]; pendingAskId?: string; toolCalls?: PlanningToolCall[] }
-export interface RunGit { branch: string; baseBranch: string; baseCommit: string; repository?: string; approvedTree?: string; publishing?: boolean; prUrl?: string; publishedCommit?: string }
-export interface GitPreview { branch: string; baseBranch: string; baseCommit: string; repository?: string; head: string; tree: string; token: string; stat: string; diff: string; title: string; body: string; canPublish: boolean; reason?: string; prUrl?: string }
-export interface SourceBaseline { fingerprint:string; files:{path:string;hash:string}[] }
-export interface AutomationDecision { offeredActions?: string[]; at:string; inputHash:string; choice:string; confidence:number; model?:string; probabilities?:Record<string,number>; appliedAt?:string; action:string; reason:string }
-export interface RunAutomation { escalation?: AgentExecution & {used: boolean; stepId?: string}; version:1; publication:'manual'|'draft'; status:'awaiting_plan'|'active'|'deciding'|'paused'|'publishing'|'done'; approvedAt?:string; contractHash?:string; repairsUsed:number; maxRepairs:2; message:string; decisions:AutomationDecision[] }
-export interface Run { automation?:RunAutomation; sourceBaseline?:SourceBaseline; git?: RunGit; id: string; title: string; task: string; project: string; projectLocation?: ManagedProject; workflowId: string; workflowName: string; mode: 'live' | 'demo'; status: RunStatus; steps: StepRun[]; currentStep: number; createdAt: string; updatedAt: string; workspace: string; error: string | null }
-export interface RunEvent { id: number; runId: string; stepId: string | null; timestamp: string; type: 'status' | 'log' | 'output' | 'approval' | 'revision' | 'error'; message: string }
-export interface ProviderInfo { id: ProviderId; name: string; installed: boolean; version: string | null; authentication: 'not_checked'; error: string | null; suggestedModel: string; efforts: string[]; loginCommand: string }
-export interface ProjectInfo { id: string; name: string; sourcePath?: string; hostPath?: string; folder?: string; kind?: 'connected' | 'imported'; workspaceMode?: 'direct' | 'isolated' | 'worktree'; status?: 'active' | 'archived' | 'disconnected'; available?: boolean; runCount?: number }
-export interface ManagedProject extends ProjectInfo { sourcePath: string; hostPath: string; kind: 'connected' | 'imported'; workspaceMode: 'direct' | 'isolated' | 'worktree'; status: 'active' | 'archived' | 'disconnected' }
-export interface AppConfig { dataDir: string; workspaceRoot: string; projectRoot?: string; projectHostRoot?: string; port: number; host: string; cliTimeoutMs: number; cliIdleTimeoutMs?: number; maxOutputBytes: number; binaries?: Partial<Record<ProviderId,string>> }
-export interface AgentEvent { type: 'log' | 'output' | 'error' | 'ask' | 'tool'; toolCall?: PlanningToolCall; message: string; replace?: boolean; questions?: PlanningQuestion[] }
-export interface AgentResult { output: string; sessionId: string | null; costUsd: number | null }
-export type ExecuteAgent = (step: StepDefinition, prompt: string, workspace: string, signal: AbortSignal, onEvent: (event: AgentEvent) => void) => Promise<AgentResult>;
+export type RunStatus =
+  | 'queued'
+  | 'running'
+  | 'waiting_input'
+  | 'waiting_approval'
+  | 'blocked'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'interrupted';
+export type StepStatus =
+  | 'pending'
+  | 'running'
+  | 'waiting_input'
+  | 'waiting_approval'
+  | 'blocked'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+export interface ValidationCommand {
+  executable: string;
+  args: string[];
+  timeoutMs: number;
+}
+export interface ValidationResult {
+  command: ValidationCommand;
+  status: 'running' | 'passed' | 'failed' | 'timed_out' | 'cancelled';
+  exitCode: number | null;
+  output: string;
+  truncated: boolean;
+  startedAt: string;
+  finishedAt?: string;
+}
+export interface ValidationSignals {
+  status: 'ready' | 'failed' | 'unavailable' | 'simulated';
+  model?: string;
+  message?: string;
+  claimsSupported?: number;
+  scopeDrift?: number;
+  needsHuman?: number;
+}
+export interface ValidationEvidence {
+  attempt: number;
+  status: 'running' | 'passed' | 'failed' | 'simulated';
+  before: string;
+  after?: string;
+  commands: ValidationResult[];
+  signals?: ValidationSignals;
+  startedAt: string;
+  finishedAt?: string;
+}
+export interface StepDefinition {
+  council?: { reviewers: CouncilMember[]; secondOpinion?: CouncilMember };
+  validation?: { commands: ValidationCommand[] };
+  id: string;
+  name: string;
+  role: string;
+  provider: ProviderId;
+  model: string;
+  effort: string;
+  instructions: string;
+  access: 'read-only' | 'workspace-write';
+  approval: boolean;
+  planning?: boolean;
+}
+export interface Workflow {
+  archived?: boolean;
+  allowSplit?: boolean;
+  id: string;
+  name: string;
+  description: string;
+  steps: StepDefinition[];
+  updatedAt: string;
+}
+export interface PlanningQuestion {
+  question: string;
+  header?: string;
+  multiSelect?: boolean;
+  options?: (
+    string | { label: string; description?: string; recommended?: boolean }
+  )[];
+}
+export interface PlanningMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+  questions?: PlanningQuestion[];
+}
+export interface PlanningToolCall {
+  outputOffset?: number;
+  id: string;
+  name: string;
+  status: 'running' | 'completed' | 'failed' | 'unknown';
+  input: Record<string, string | number | boolean>;
+  summary?: string;
+  startedAt: string;
+  finishedAt?: string;
+  turnId?: string;
+}
+export interface AgentExecution {
+  provider: ProviderId;
+  model: string;
+  effort: string;
+  reason?: 'escalation';
+}
+export interface StepAttempt {
+  execution?: AgentExecution;
+  council?: CouncilEvidence;
+  validation?: ValidationEvidence;
+  conversation?: PlanningMessage[];
+  toolCalls?: PlanningToolCall[];
+  attempt: number;
+  status: StepStatus;
+  output: string;
+  error: string | null;
+  feedback: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  costUsd: number | null;
+}
+export interface ReviewAssessment {
+  status: 'running' | 'ready' | 'unavailable' | 'failed';
+  attempt: number;
+  output: string;
+  category?:
+    | 'code_fix'
+    | 'missing_requirement'
+    | 'environment'
+    | 'mixed'
+    | 'no_blocker'
+    | 'unclear';
+  confidence?: number;
+  model?: string;
+  message?: string;
+  createdAt: string;
+}
+export interface StepRun {
+  execution?: AgentExecution;
+  council?: CouncilEvidence;
+  validation?: ValidationEvidence;
+  assessment?: ReviewAssessment;
+  history?: StepAttempt[];
+  definition: StepDefinition;
+  status: StepStatus;
+  attempt: number;
+  output: string;
+  error: string | null;
+  sessionId: string | null;
+  feedback: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  costUsd: number | null;
+  conversation?: PlanningMessage[];
+  pendingAskId?: string;
+  toolCalls?: PlanningToolCall[];
+}
+export interface RunGit {
+  branch: string;
+  baseBranch: string;
+  baseCommit: string;
+  repository?: string;
+  approvedTree?: string;
+  publishing?: boolean;
+  prUrl?: string;
+  publishedCommit?: string;
+}
+export interface GitPreview {
+  branch: string;
+  baseBranch: string;
+  baseCommit: string;
+  repository?: string;
+  head: string;
+  tree: string;
+  token: string;
+  stat: string;
+  diff: string;
+  title: string;
+  body: string;
+  canPublish: boolean;
+  reason?: string;
+  prUrl?: string;
+}
+export interface SourceBaseline {
+  fingerprint: string;
+  files: { path: string; hash: string }[];
+}
+export interface AutomationDecision {
+  offeredActions?: string[];
+  at: string;
+  inputHash: string;
+  choice: string;
+  confidence: number;
+  model?: string;
+  probabilities?: Record<string, number>;
+  appliedAt?: string;
+  action: string;
+  reason: string;
+}
+export interface RunAutomation {
+  escalation?: AgentExecution & { used: boolean; stepId?: string };
+  version: 1;
+  publication: 'manual' | 'draft';
+  status:
+    'awaiting_plan' | 'active' | 'deciding' | 'paused' | 'publishing' | 'done';
+  approvedAt?: string;
+  contractHash?: string;
+  repairsUsed: number;
+  maxRepairs: 2;
+  message: string;
+  decisions: AutomationDecision[];
+}
+export interface Run {
+  crate?: CrateState;
+  automation?: RunAutomation;
+  sourceBaseline?: SourceBaseline;
+  git?: RunGit;
+  id: string;
+  title: string;
+  task: string;
+  project: string;
+  projectLocation?: ManagedProject;
+  workflowId: string;
+  workflowName: string;
+  mode: 'live' | 'demo';
+  status: RunStatus;
+  steps: StepRun[];
+  currentStep: number;
+  createdAt: string;
+  updatedAt: string;
+  workspace: string;
+  error: string | null;
+}
+export interface RunEvent {
+  id: number;
+  runId: string;
+  stepId: string | null;
+  timestamp: string;
+  type: 'status' | 'log' | 'output' | 'approval' | 'revision' | 'error';
+  message: string;
+}
+export interface ProviderInfo {
+  id: ProviderId;
+  name: string;
+  installed: boolean;
+  version: string | null;
+  authentication: 'not_checked';
+  error: string | null;
+  suggestedModel: string;
+  efforts: string[];
+  loginCommand: string;
+}
+export interface ProjectInfo {
+  id: string;
+  name: string;
+  sourcePath?: string;
+  hostPath?: string;
+  folder?: string;
+  kind?: 'connected' | 'imported';
+  workspaceMode?: 'direct' | 'isolated' | 'worktree';
+  status?: 'active' | 'archived' | 'disconnected';
+  available?: boolean;
+  runCount?: number;
+}
+export interface ManagedProject extends ProjectInfo {
+  sourcePath: string;
+  hostPath: string;
+  kind: 'connected' | 'imported';
+  workspaceMode: 'direct' | 'isolated' | 'worktree';
+  status: 'active' | 'archived' | 'disconnected';
+}
+export interface AppConfig {
+  dataDir: string;
+  workspaceRoot: string;
+  projectRoot?: string;
+  projectHostRoot?: string;
+  port: number;
+  host: string;
+  cliTimeoutMs: number;
+  cliIdleTimeoutMs?: number;
+  maxOutputBytes: number;
+  binaries?: Partial<Record<ProviderId, string>>;
+}
+export interface AgentEvent {
+  type: 'log' | 'output' | 'error' | 'ask' | 'tool';
+  toolCall?: PlanningToolCall;
+  message: string;
+  replace?: boolean;
+  questions?: PlanningQuestion[];
+}
+export interface AgentResult {
+  output: string;
+  sessionId: string | null;
+  costUsd: number | null;
+}
+export type ExecuteAgent = (
+  step: StepDefinition,
+  prompt: string,
+  workspace: string,
+  signal: AbortSignal,
+  onEvent: (event: AgentEvent) => void,
+) => Promise<AgentResult>;

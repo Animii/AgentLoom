@@ -1,0 +1,20 @@
+services:
+  browser:
+    build:
+      context: .
+      dockerfile: Dockerfile.tests
+    init: true
+    ipc: private
+    shm_size: 1gb
+    environment:
+      CI: 'true'
+      OPENAI_API_KEY: ''
+      ANTHROPIC_API_KEY: ''
+      DEEPSEEK_API_KEY: ''
+      JEV_API_KEY: ''
+      TYPESAFE_API_KEY: ''
+      GITHUB_TOKEN: ''
+      GH_TOKEN: ''
+    volumes:
+      - ./test-results:/app/test-results
+      - ./playwright-report:/app/playwright-report

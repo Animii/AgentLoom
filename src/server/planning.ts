@@ -19,24 +19,42 @@ PLAN_READY when the self-contained proposed plan is ready for the user to approv
 Do not put the status line in a code block. These rules override instructions to report BLOCKED merely because requirements are missing: ask the user instead.
 The platform, not you, advances the workflow only after explicit user approval.`;
 
-export function message(role: PlanningMessage['role'], content: string, id: string = randomUUID()): PlanningMessage {
+export function message(
+  role: PlanningMessage['role'],
+  content: string,
+  id: string = randomUUID(),
+): PlanningMessage {
   return { id, role, content, createdAt: new Date().toISOString() };
 }
 
-export function initializeConversation(run: Run, step: StepRun): void {
-  if (step.conversation) return;
-  step.conversation = [message('user', run.task)];
-  if (step.output.trim()) step.conversation.push(message('assistant', step.output));
+export function initializeConversation(
+  run: Run,
+  step: StepRun,
+): NonNullable<StepRun['conversation']> {
+  if (!step.conversation) {
+    step.conversation = [message('user', run.task)];
+    if (step.output.trim())
+      step.conversation.push(message('assistant', step.output));
+  }
+  return step.conversation;
 }
 
 export function checkConversation(step: StepRun): void {
   const transcript = step.conversation ?? [];
-  if (transcript.length > 80 || JSON.stringify(transcript).length > PLANNING_LIMIT) {
-    throw new Error('This planning conversation is too long. Start a new run with a concise summary of the agreed requirements.');
+  if (
+    transcript.length > 80 ||
+    JSON.stringify(transcript).length > PLANNING_LIMIT
+  ) {
+    throw new Error(
+      'This planning conversation is too long. Start a new run with a concise summary of the agreed requirements.',
+    );
   }
 }
 
-export function planningReply(output: string): { content: string; ready: boolean } {
+export function planningReply(output: string): {
+  content: string;
+  ready: boolean;
+} {
   const trimmed = output.trim();
   const marker = /(?:^|\n)(PLAN_READY|PLAN_QUESTIONS)\s*$/.exec(trimmed);
   const content = marker ? trimmed.slice(0, marker.index).trim() : trimmed;

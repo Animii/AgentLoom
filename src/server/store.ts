@@ -1,8 +1,20 @@
+import type { Repository } from './ports/repository.js';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import type { ManagedProject, Run, RunEvent, Workflow } from '../shared/types.js';
-import { initialWorkflows, evidenceWorkflow, councilWorkflow, singleReviewWorkflow } from './templates.js';
+import type {
+  ManagedProject,
+  Run,
+  RunEvent,
+  Workflow,
+} from '../shared/types.js';
+import {
+  initialWorkflows,
+  evidenceWorkflow,
+  councilWorkflow,
+  singleReviewWorkflow,
+  crateWorkflow,
+} from './templates.js';
 
 const MAX_EVENT_MESSAGE_LENGTH = 100000;
 const MAX_EVENTS_PER_QUERY = 2000;
@@ -28,14 +40,18 @@ interface CountRow {
   count: number | bigint;
 }
 
-export class Store {
+export class Store implements Repository {
   private readonly db: DatabaseSync;
   private readonly listeners = new Map<string, Set<() => void>>();
 
   subscribe(runId: string, listener: () => void): () => void {
     const group = this.listeners.get(runId) ?? new Set<() => void>();
-    group.add(listener); this.listeners.set(runId, group);
-    return () => { group.delete(listener); if (!group.size) this.listeners.delete(runId); };
+    group.add(listener);
+    this.listeners.set(runId, group);
+    return () => {
+      group.delete(listener);
+      if (!group.size) this.listeners.delete(runId);
+    };
   }
 
   constructor(dataDir: string) {
@@ -67,11 +83,17 @@ export class Store {
   }
 
   private seedTemplates(): void {
-    const row = this.db.prepare('SELECT COUNT(*) AS count FROM workflows').get() as unknown as CountRow;
+    const row = this.db
+      .prepare('SELECT COUNT(*) AS count FROM workflows')
+      .get() as unknown as CountRow;
     if (Number(row.count) > 0) {
-      if (!this.getWorkflow(singleReviewWorkflow.id)) this.saveWorkflow(singleReviewWorkflow);
-      if (!this.getWorkflow(councilWorkflow.id)) this.saveWorkflow(councilWorkflow);
-      if (!this.getWorkflow(evidenceWorkflow.id)) this.saveWorkflow(evidenceWorkflow);
+      if (!this.getWorkflow(crateWorkflow.id)) this.saveWorkflow(crateWorkflow);
+      if (!this.getWorkflow(singleReviewWorkflow.id))
+        this.saveWorkflow(singleReviewWorkflow);
+      if (!this.getWorkflow(councilWorkflow.id))
+        this.saveWorkflow(councilWorkflow);
+      if (!this.getWorkflow(evidenceWorkflow.id))
+        this.saveWorkflow(evidenceWorkflow);
       return;
     }
     for (const workflow of initialWorkflows) {
@@ -80,23 +102,36 @@ export class Store {
   }
 
   listWorkflows(): Workflow[] {
-    const rows = this.db.prepare('SELECT data FROM workflows ORDER BY rowid ASC').all() as unknown as WorkflowRow[];
+    const rows = this.db
+      .prepare('SELECT data FROM workflows ORDER BY rowid ASC')
+      .all() as unknown as WorkflowRow[];
     return rows.map((row) => JSON.parse(row.data) as Workflow);
   }
 
   listProjects(): ManagedProject[] {
-    return (this.db.prepare('SELECT data FROM projects ORDER BY rowid').all() as unknown as { data: string }[]).map(row => JSON.parse(row.data));
+    const rows = this.db
+      .prepare('SELECT data FROM projects ORDER BY rowid')
+      .all() as unknown as { data: string }[];
+    return rows.map((row) => JSON.parse(row.data) as ManagedProject);
   }
   getProject(id: string): ManagedProject | undefined {
-    const row = this.db.prepare('SELECT data FROM projects WHERE id = ?').get(id) as { data: string } | undefined;
-    return row ? JSON.parse(row.data) : undefined;
+    const row = this.db
+      .prepare('SELECT data FROM projects WHERE id = ?')
+      .get(id) as { data: string } | undefined;
+    return row ? (JSON.parse(row.data) as ManagedProject) : undefined;
   }
   saveProject(project: ManagedProject): void {
-    this.db.prepare('INSERT INTO projects (id, data) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data').run(project.id, JSON.stringify(project));
+    this.db
+      .prepare(
+        'INSERT INTO projects (id, data) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data',
+      )
+      .run(project.id, JSON.stringify(project));
   }
 
   getWorkflow(id: string): Workflow | undefined {
-    const row = this.db.prepare('SELECT data FROM workflows WHERE id = ?').get(id) as WorkflowRow | undefined;
+    const row = this.db
+      .prepare('SELECT data FROM workflows WHERE id = ?')
+      .get(id) as WorkflowRow | undefined;
     if (row === undefined) {
       return undefined;
     }
@@ -105,7 +140,9 @@ export class Store {
 
   saveWorkflow(workflow: Workflow): void {
     this.db
-      .prepare('INSERT INTO workflows (id, data) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data')
+      .prepare(
+        'INSERT INTO workflows (id, data) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data',
+      )
       .run(workflow.id, JSON.stringify(workflow));
   }
 
@@ -117,7 +154,9 @@ export class Store {
   }
 
   getRun(id: string): Run | undefined {
-    const row = this.db.prepare('SELECT data FROM runs WHERE id = ?').get(id) as RunRow | undefined;
+    const row = this.db
+      .prepare('SELECT data FROM runs WHERE id = ?')
+      .get(id) as RunRow | undefined;
     if (row === undefined) {
       return undefined;
     }
@@ -134,11 +173,39 @@ export class Store {
     for (const listener of this.listeners.get(run.id) ?? []) listener();
   }
 
-  addEvent(runId: string, stepId: string | null, type: RunEvent['type'], message: string): RunEvent {
+  saveRuns(runs: Run[]): void {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const statement = this.db.prepare(
+        'INSERT INTO runs (id,data,created_at) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data',
+      );
+      for (const run of runs)
+        statement.run(
+          run.id,
+          JSON.stringify({ ...run, updatedAt: new Date().toISOString() }),
+          run.createdAt,
+        );
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+    for (const run of runs)
+      for (const listener of this.listeners.get(run.id) ?? []) listener();
+  }
+
+  addEvent(
+    runId: string,
+    stepId: string | null,
+    type: RunEvent['type'],
+    message: string,
+  ): RunEvent {
     const cappedMessage = message.slice(0, MAX_EVENT_MESSAGE_LENGTH);
     const timestamp = new Date().toISOString();
     const result = this.db
-      .prepare('INSERT INTO events (run_id, step_id, timestamp, type, message) VALUES (?, ?, ?, ?, ?)')
+      .prepare(
+        'INSERT INTO events (run_id, step_id, timestamp, type, message) VALUES (?, ?, ?, ?, ?)',
+      )
       .run(runId, stepId, timestamp, type, cappedMessage);
     return {
       id: Number(result.lastInsertRowid),

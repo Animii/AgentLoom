@@ -1,0 +1,24 @@
+# Generated and vendored output
+node_modules/
+dist/
+.data/
+artifacts/
+workspaces/
+playwright-report/
+test-results/
+package-lock.json
+*.log
+
+# Local tooling state and nested worktrees, never maintained here
+.git/
+.claude/
+.auth/
+
+# Historical research, pilot and evaluation records
+docs/*
+!docs/TESTING.md
+!docs/ARCHITECTURE.md
+
+# Pilot scripts and prohibited untracked research tooling
+scripts/pilots/
+scripts/test-jev-cookbooks.mjs

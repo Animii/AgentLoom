@@ -8,3 +8,9 @@ workspaces
 test-results
 playwright-report
 artifacts
+
+.env.*
+!.env.example
+coverage
+
+.claude/

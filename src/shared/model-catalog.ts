@@ -47,12 +47,17 @@ const PROVIDER_NAMES: Record<ProviderId, string> = {
 };
 
 const STATUS_MESSAGES: Record<ModelFallbackStatus, string> = {
-  builtin: 'Live model discovery is not available for {provider}. Showing built-in suggestions.',
+  builtin:
+    'Live model discovery is not available for {provider}. Showing built-in suggestions.',
   empty: '{provider} reported no models. Showing built-in suggestions.',
-  missing: 'The {provider} CLI was not found on the AgentLoom server. Showing built-in suggestions.',
-  unsupported: 'This {provider} version does not support model listing. Showing built-in suggestions.',
-  timeout: '{provider} model discovery timed out. Showing built-in suggestions.',
-  malformed: '{provider} model discovery returned an unusable response. Showing built-in suggestions.',
+  missing:
+    'The {provider} CLI was not found on the AgentLoom server. Showing built-in suggestions.',
+  unsupported:
+    'This {provider} version does not support model listing. Showing built-in suggestions.',
+  timeout:
+    '{provider} model discovery timed out. Showing built-in suggestions.',
+  malformed:
+    '{provider} model discovery returned an unusable response. Showing built-in suggestions.',
   failed: '{provider} model discovery failed. Showing built-in suggestions.',
 };
 
@@ -60,21 +65,39 @@ export function providerDisplayName(provider: ProviderId): string {
   return PROVIDER_NAMES[provider];
 }
 
-export function modelCatalogMessage(provider: ProviderId, status: ModelCatalogStatus): string | null {
+export function modelCatalogMessage(
+  provider: ProviderId,
+  status: ModelCatalogStatus,
+): string | null {
   if (status === 'discovered') return null;
-  return STATUS_MESSAGES[status].replace('{provider}', PROVIDER_NAMES[provider]);
+  return STATUS_MESSAGES[status].replace(
+    '{provider}',
+    PROVIDER_NAMES[provider],
+  );
 }
 
 export function isValidModelId(value: string): boolean {
   return (
     value.length > 0 &&
     value.length <= MODEL_ID_MAX_LENGTH &&
-    !/[\u0000-\u001f\u007f]/.test(value) &&
+    !hasControlCharacter(value) &&
     !value.startsWith('-')
   );
 }
 
-export function suggestedCatalog(provider: ProviderId, status: ModelFallbackStatus = 'builtin'): ModelCatalog {
+function hasControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint !== undefined && (codePoint < 0x20 || codePoint === 0x7f))
+      return true;
+  }
+  return false;
+}
+
+export function suggestedCatalog(
+  provider: ProviderId,
+  status: ModelFallbackStatus = 'builtin',
+): ModelCatalog {
   return {
     provider,
     status,

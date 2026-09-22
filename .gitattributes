@@ -1,0 +1,5 @@
+# Store every text file with LF and check it out with LF as well, so a fresh
+# Windows checkout with core.autocrlf=true still passes `npm run format:check`
+# (Prettier endOfLine is "lf"). `text=auto` keeps Git's binary detection, so
+# non-text files are never converted.
+* text=auto eol=lf

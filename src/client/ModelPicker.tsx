@@ -66,28 +66,47 @@ export default function ModelPicker({
             choice.id.toLowerCase().includes(query) ||
             (choice.label ?? '').toLowerCase().includes(query),
         );
-  const savedMissing = value.length > 0 && !models.some((choice) => choice.id === value);
-  const options: PickerOption[] = allowDefault ? [{ key: 'cli-default', kind: 'default', value: '' }] : [];
+  const savedMissing =
+    value.length > 0 && !models.some((choice) => choice.id === value);
+  const options: PickerOption[] = allowDefault
+    ? [{ key: 'cli-default', kind: 'default', value: '' }]
+    : [];
   if (savedMissing) options.push({ key: 'saved', kind: 'saved', value });
   for (const choice of matches) {
-    options.push({ key: `model:${choice.id}`, kind: 'model', value: choice.id, choice });
+    options.push({
+      key: `model:${choice.id}`,
+      kind: 'model',
+      value: choice.id,
+      choice,
+    });
   }
   const canUseCustom =
-    customValue.length > 0 && isValidModelId(customValue) && !models.some((choice) => choice.id === customValue);
-  if (canUseCustom) options.push({ key: 'custom', kind: 'custom', value: customValue });
+    customValue.length > 0 &&
+    isValidModelId(customValue) &&
+    !models.some((choice) => choice.id === customValue);
+  if (canUseCustom)
+    options.push({ key: 'custom', kind: 'custom', value: customValue });
   const invalidHint = customValue.length > 0 && !isValidModelId(customValue);
-  const boundedIndex = options.length === 0 ? -1 : Math.min(activeIndex, options.length - 1);
-  const groupLabel = catalog?.status === 'discovered' ? `Discovered from ${providerName}` : 'Built-in suggestions';
+  const boundedIndex =
+    options.length === 0 ? -1 : Math.min(activeIndex, options.length - 1);
+  const groupLabel =
+    catalog?.status === 'discovered'
+      ? `Discovered from ${providerName}`
+      : 'Built-in suggestions';
 
   useEffect(() => {
     if (!open || boundedIndex < 0) return;
     const list = listRef.current;
-    const option = list?.querySelector<HTMLElement>(`#${baseId}-option-${boundedIndex}`);
+    const option = list?.querySelector<HTMLElement>(
+      `#${baseId}-option-${String(boundedIndex)}`,
+    );
     if (!list || !option) return;
     const listRect = list.getBoundingClientRect();
     const optionRect = option.getBoundingClientRect();
-    if (optionRect.top < listRect.top) list.scrollTop -= listRect.top - optionRect.top;
-    else if (optionRect.bottom > listRect.bottom) list.scrollTop += optionRect.bottom - listRect.bottom;
+    if (optionRect.top < listRect.top)
+      list.scrollTop -= listRect.top - optionRect.top;
+    else if (optionRect.bottom > listRect.bottom)
+      list.scrollTop += optionRect.bottom - listRect.bottom;
   }, [baseId, boundedIndex, open]);
 
   function select(option: PickerOption): void {
@@ -158,7 +177,8 @@ export default function ModelPicker({
   function statusText(): string {
     if (loading) return 'Loading models…';
     if (catalog && catalog.message) return catalog.message;
-    if (value.length === 0 && !allowDefault) return 'An explicit model is required for this reviewer.';
+    if (value.length === 0 && !allowDefault)
+      return 'An explicit model is required for this reviewer.';
     if (value.length > 0) {
       const match = models.find((choice) => choice.id === value);
       if (match) {
@@ -189,12 +209,20 @@ export default function ModelPicker({
       );
     }
     if (option.kind === 'custom') {
-      return <span className="model-picker-option-label">Use custom model &quot;{option.value}&quot;</span>;
+      return (
+        <span className="model-picker-option-label">
+          Use custom model &quot;{option.value}&quot;
+        </span>
+      );
     }
     if (!option.choice) return null;
     return (
       <>
-        {option.choice.label !== null && <span className="model-picker-option-label">{option.choice.label}</span>}
+        {option.choice.label !== null && (
+          <span className="model-picker-option-label">
+            {option.choice.label}
+          </span>
+        )}
         <code>{option.choice.id}</code>
       </>
     );
@@ -209,7 +237,11 @@ export default function ModelPicker({
           aria-label={label}
           aria-expanded={open}
           aria-controls={listboxId}
-          aria-activedescendant={open && boundedIndex >= 0 ? `${baseId}-option-${boundedIndex}` : undefined}
+          aria-activedescendant={
+            open && boundedIndex >= 0
+              ? `${baseId}-option-${String(boundedIndex)}`
+              : undefined
+          }
           aria-autocomplete="list"
           autoComplete="off"
           spellCheck={false}
@@ -230,7 +262,9 @@ export default function ModelPicker({
             setSearch(null);
             setActiveIndex(0);
           }}
-          onChange={(event) => updateDraft(event.target.value)}
+          onChange={(event) => {
+            updateDraft(event.target.value);
+          }}
           onKeyDown={handleKeyDown}
           onClick={() => {
             if (!open) {
@@ -244,7 +278,9 @@ export default function ModelPicker({
           ref={toggleRef}
           type="button"
           className="button model-picker-toggle"
-          aria-label={open ? `Hide ${providerName} models` : `Show ${providerName} models`}
+          aria-label={
+            open ? `Hide ${providerName} models` : `Show ${providerName} models`
+          }
           aria-expanded={open}
           aria-controls={listboxId}
           onClick={() => {
@@ -275,19 +311,32 @@ export default function ModelPicker({
           </button>
         )}
         {open && (
-          <ul className="model-picker-list" id={listboxId} ref={listRef} role="listbox" aria-label={`${providerName} models`}>
+          <ul
+            className="model-picker-list"
+            id={listboxId}
+            ref={listRef}
+            role="listbox"
+            aria-label={`${providerName} models`}
+          >
             {options.map((option, index) => (
               <Fragment key={option.key}>
-                {option.kind === 'model' && (index === 0 || options[index - 1].kind !== 'model') && (
-                  <li role="presentation" className="model-picker-group">{groupLabel}</li>
-                )}
+                {option.kind === 'model' &&
+                  (index === 0 || options[index - 1].kind !== 'model') && (
+                    <li role="presentation" className="model-picker-group">
+                      {groupLabel}
+                    </li>
+                  )}
                 <li
-                  id={`${baseId}-option-${index}`}
+                  id={`${baseId}-option-${String(index)}`}
                   role="option"
                   aria-selected={index === boundedIndex}
                   className={`model-picker-option${index === boundedIndex ? ' is-active' : ''}`}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => select(option)}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                  }}
+                  onClick={() => {
+                    select(option);
+                  }}
                 >
                   {renderOption(option)}
                 </li>
@@ -295,13 +344,16 @@ export default function ModelPicker({
             ))}
             {invalidHint && (
               <li role="presentation" className="model-picker-hint">
-                Model identifiers must not begin with &quot;-&quot;, contain control characters, or exceed 120 characters.
+                Model identifiers must not begin with &quot;-&quot;, contain
+                control characters, or exceed 120 characters.
               </li>
             )}
           </ul>
         )}
       </div>
-      <p className="field-helper" role="status">{statusText()}</p>
+      <p className="field-helper" role="status">
+        {statusText()}
+      </p>
     </div>
   );
 }

@@ -26,7 +26,8 @@ export class AgentTextStream {
       this.claudePartial = false;
       return; // Assistant envelopes repeat the preceding partial text.
     }
-    const text = (this.provider === 'codex' && this.output ? '\n\n' : '') + parsed.text;
+    const text =
+      (this.provider === 'codex' && this.output ? '\n\n' : '') + parsed.text;
     this.output += text;
     return { type: 'output', message: text };
   }
@@ -35,7 +36,8 @@ export class AgentTextStream {
 type JsonRecord = Record<string, unknown>;
 
 function asRecord(value: unknown): JsonRecord | undefined {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    return undefined;
   return value as JsonRecord;
 }
 
@@ -44,7 +46,9 @@ function asString(value: unknown): string | undefined {
 }
 
 function asCost(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined;
 }
 
 function claudeText(message: JsonRecord): string | undefined {
@@ -80,7 +84,9 @@ function codexError(record: JsonRecord): string {
     asString(record.error) ??
     asString(asRecord(record.error)?.message) ??
     asString(record.message);
-  return text !== undefined && text.length > 0 ? text : 'Codex reported an error';
+  return text !== undefined && text.length > 0
+    ? text
+    : 'Codex reported an error';
 }
 
 function openCodeError(record: JsonRecord): string {
@@ -98,7 +104,10 @@ function openCodeError(record: JsonRecord): string {
   }
   return 'OpenCode reported an error';
 }
-export function parseAgentLine(provider: ProviderId, line: string): ParsedAgentLine {
+export function parseAgentLine(
+  provider: ProviderId,
+  line: string,
+): ParsedAgentLine {
   let parsed: unknown;
   try {
     parsed = JSON.parse(line);
@@ -113,7 +122,12 @@ export function parseAgentLine(provider: ProviderId, line: string): ParsedAgentL
     if (type === 'stream_event') {
       const event = asRecord(record.event);
       const delta = asRecord(event?.delta);
-      if (event?.type === 'content_block_delta' && delta?.type === 'text_delta' && typeof delta.text === 'string') return { text: delta.text, delta: true };
+      if (
+        event?.type === 'content_block_delta' &&
+        delta?.type === 'text_delta' &&
+        typeof delta.text === 'string'
+      )
+        return { text: delta.text, delta: true };
       return { silent: true };
     }
     if (type === 'assistant') {
@@ -124,7 +138,8 @@ export function parseAgentLine(provider: ProviderId, line: string): ParsedAgentL
     if (type === 'result') {
       const subtype = asString(record.subtype);
       const isError =
-        record.is_error === true || (subtype !== undefined && subtype.startsWith('error'));
+        record.is_error === true ||
+        (subtype !== undefined && subtype.startsWith('error'));
       const out: ParsedAgentLine = {};
       if (!isError) {
         const text = asString(record.result);
@@ -157,33 +172,30 @@ export function parseAgentLine(provider: ProviderId, line: string): ParsedAgentL
     if (type === 'turn.completed') return { complete: true };
     return {};
   }
-  if (provider === 'opencode') {
-    const sessionId = asString(record.sessionID);
-    if (type === 'text') {
-      const part = asRecord(record.part);
-      const out: ParsedAgentLine = {};
-      const text = part !== undefined ? asString(part.text) : undefined;
-      if (text !== undefined) out.text = text;
-      if (sessionId !== undefined) out.sessionId = sessionId;
-      return out;
-    }
-    if (type === 'step_finish') {
-      const part = asRecord(record.part);
-      const out: ParsedAgentLine = {};
-      const cost = part !== undefined ? asCost(part.cost) : undefined;
-      if (cost !== undefined) out.costUsd = cost;
-      const reason = part !== undefined ? asString(part.reason) : undefined;
-      if (reason === 'stop') out.complete = true;
-      if (reason === 'length') out.error = 'Provider output limit reached';
-      if (sessionId !== undefined) out.sessionId = sessionId;
-      return out;
-    }
-    if (type === 'error') {
-      const out: ParsedAgentLine = { error: openCodeError(record) };
-      if (sessionId !== undefined) out.sessionId = sessionId;
-      return out;
-    }
-    return {};
+  const sessionId = asString(record.sessionID);
+  if (type === 'text') {
+    const part = asRecord(record.part);
+    const out: ParsedAgentLine = {};
+    const text = part !== undefined ? asString(part.text) : undefined;
+    if (text !== undefined) out.text = text;
+    if (sessionId !== undefined) out.sessionId = sessionId;
+    return out;
+  }
+  if (type === 'step_finish') {
+    const part = asRecord(record.part);
+    const out: ParsedAgentLine = {};
+    const cost = part !== undefined ? asCost(part.cost) : undefined;
+    if (cost !== undefined) out.costUsd = cost;
+    const reason = part !== undefined ? asString(part.reason) : undefined;
+    if (reason === 'stop') out.complete = true;
+    if (reason === 'length') out.error = 'Provider output limit reached';
+    if (sessionId !== undefined) out.sessionId = sessionId;
+    return out;
+  }
+  if (type === 'error') {
+    const out: ParsedAgentLine = { error: openCodeError(record) };
+    if (sessionId !== undefined) out.sessionId = sessionId;
+    return out;
   }
   return {};
 }
