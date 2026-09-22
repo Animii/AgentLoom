@@ -84,7 +84,12 @@ export class Projects {
     if (!project) throw new Error('Project not found.');
     if (changes.workspaceMode === 'worktree') await checkGitSource(await this.resolve(project));
     if (changes.status === 'active') await this.resolve(project);
-    if ((changes.workspaceMode && changes.workspaceMode !== project.workspaceMode || changes.status && changes.status !== project.status) && this.store.listRuns().some(run => run.project === id && liveStatuses.has(run.status))) throw new Error('Finish or cancel this project’s active runs before changing access or status.');
+    const modeChanged = changes.workspaceMode && changes.workspaceMode !== project.workspaceMode;
+    const statusChanged = changes.status && changes.status !== project.status;
+    const archiving = changes.status === 'archived' && !modeChanged;
+    const restoring = changes.status === 'active' && project.status === 'archived' && !modeChanged;
+    // Archiving pauses access; idle runs retain their exact state and can resume after restoration.
+    if ((modeChanged || statusChanged) && !restoring && this.store.listRuns().some(run => run.project === id && (archiving ? ['queued','running'].includes(run.status) : liveStatuses.has(run.status)))) throw new Error('Finish or cancel this project’s active runs before changing access or status.');
     const updated = { ...project, ...changes }; this.store.saveProject(updated); return updated;
   }
 

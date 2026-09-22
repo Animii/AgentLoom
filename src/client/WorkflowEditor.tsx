@@ -39,7 +39,9 @@ export default function WorkflowEditor({
   workflows: Workflow[];
   onSaved: (workflow: Workflow) => void;
 }) {
-  const [selectedId, setSelectedId] = useUrlSelection('workflow', workflows[0]?.id ?? null);
+  const [showArchived, setShowArchived] = useState(false);
+  const visibleWorkflows = workflows.filter(workflow => showArchived || !workflow.archived);
+  const [selectedId, setSelectedId] = useUrlSelection('workflow', visibleWorkflows[0]?.id ?? null);
   const [draft, setDraft] = useState<Workflow | null>(null);
   const [saving, setSaving] = useState(false);
   const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
@@ -79,9 +81,8 @@ export default function WorkflowEditor({
   }, []);
 
   useEffect(() => {
-    if (selectedId === null && workflows[0]) setSelectedId(workflows[0].id);
-    else if (selectedId !== null && !workflows.some((w) => w.id === selectedId)) setSelectedId(workflows[0]?.id ?? null);
-  }, [workflows, selectedId]);
+    if (!visibleWorkflows.some(w => w.id === selectedId)) setSelectedId(visibleWorkflows[0]?.id ?? null);
+  }, [workflows, selectedId, showArchived]);
 
   useEffect(() => {
     const selected = workflows.find((w) => w.id === selectedId);
@@ -182,19 +183,32 @@ export default function WorkflowEditor({
     }
   }
 
+  async function setArchived(archived: boolean) {
+    if (!draft) return;
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/workflows/${encodeURIComponent(draft.id)}`, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({archived})});
+      if (!response.ok) throw new Error('Unable to change workflow archive status.');
+      onSaved(await response.json() as Workflow);
+      setMessage({kind:'ok',text:archived ? 'Workflow archived. Existing runs are preserved.' : 'Workflow restored.'});
+    } catch(error) {setMessage({kind:'error',text:error instanceof Error ? error.message : 'Archive failed.'});}
+    finally {setSaving(false);}
+  }
+
   return (
     <section className="panel wf-editor">
+      <label className="wf-checkbox"><input type="checkbox" checked={showArchived} onChange={event=>setShowArchived(event.target.checked)} />Show archived workflows ({workflows.filter(w=>w.archived).length})</label>
       <label className="workflow-picker">Workflow
         <select value={selectedId ?? ''} onChange={event => setSelectedId(event.target.value)}>
-          {workflows.map(workflow => <option key={workflow.id} value={workflow.id}>{workflow.name}</option>)}
+          {visibleWorkflows.map(workflow => <option key={workflow.id} value={workflow.id}>{workflow.name}{workflow.archived ? ' (archived)' : ''}</option>)}
         </select>
       </label>
 
-      {workflows.length === 0 ? (
-        <p className="wf-empty">Loading workflows…</p>
+      {visibleWorkflows.length === 0 ? (
+        <p className="wf-empty">No active workflows. Show archived workflows to restore one.</p>
       ) : (
         <div className="wf-list">
-          {workflows.map((workflow) => (
+          {visibleWorkflows.map((workflow) => (
             <button
               key={workflow.id}
               type="button"
@@ -202,7 +216,7 @@ export default function WorkflowEditor({
               aria-pressed={workflow.id === selectedId}
               onClick={() => setSelectedId(workflow.id)}
             >
-              <strong>{workflow.name}</strong>
+              <strong>{workflow.name}{workflow.archived ? ' (archived)' : ''}</strong>
               <span>{workflow.steps.length} steps &middot; {workflow.steps.filter(s => s.approval).length} approval gates</span>
             </button>
           ))}
@@ -346,9 +360,10 @@ export default function WorkflowEditor({
           </button>
 
           <div className="wf-submit">
-            <button type="submit" className="button button-primary" disabled={saving}>
+            <button type="submit" className="button button-primary" disabled={saving || draft.archived}>
               {saving ? 'Saving…' : 'Save workflow'}
             </button>
+            <button type="button" className="button" disabled={saving} onClick={()=>void setArchived(!draft.archived)}>{draft.archived ? 'Restore workflow' : 'Archive workflow'}</button>
             {message && (
               <p className="wf-message" role={message.kind === 'error' ? 'alert' : 'status'}>
                 {message.text}

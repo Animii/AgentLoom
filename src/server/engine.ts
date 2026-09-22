@@ -101,6 +101,7 @@ export class Engine {
     automation?: {publication:'manual'|'draft';escalation?:'fable'};
   }): Promise<Run> {
     const workflow = this.store.getWorkflow(input.workflowId);
+    if (workflow?.archived) throw new Error('This workflow is archived. Restore it before starting a new run.');
     if (!workflow) {
       throw new Error('Workflow not found');
     }

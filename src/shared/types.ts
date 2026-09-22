@@ -8,7 +8,7 @@ export interface ValidationResult { command: ValidationCommand; status: "running
 export interface ValidationSignals { status: "ready" | "failed" | "unavailable" | "simulated"; model?: string; message?: string; claimsSupported?: number; scopeDrift?: number; needsHuman?: number }
 export interface ValidationEvidence { attempt: number; status: "running" | "passed" | "failed" | "simulated"; before: string; after?: string; commands: ValidationResult[]; signals?: ValidationSignals; startedAt: string; finishedAt?: string }
 export interface StepDefinition { council?: { reviewers: CouncilMember[]; secondOpinion?: CouncilMember }; validation?: { commands: ValidationCommand[] }; id: string; name: string; role: string; provider: ProviderId; model: string; effort: string; instructions: string; access: 'read-only' | 'workspace-write'; approval: boolean; planning?: boolean }
-export interface Workflow { allowSplit?:boolean; id: string; name: string; description: string; steps: StepDefinition[]; updatedAt: string }
+export interface Workflow { archived?:boolean; allowSplit?:boolean; id: string; name: string; description: string; steps: StepDefinition[]; updatedAt: string }
 export interface PlanningQuestion { question: string; header?: string; multiSelect?: boolean; options?: (string | { label: string; description?: string; recommended?: boolean })[] }
 export interface PlanningMessage { id: string; role: 'user' | 'assistant'; content: string; createdAt: string; questions?: PlanningQuestion[] }
 export interface PlanningToolCall { outputOffset?: number; id: string; name: string; status: 'running' | 'completed' | 'failed' | 'unknown'; input: Record<string, string | number | boolean>; summary?: string; startedAt: string; finishedAt?: string; turnId?: string }

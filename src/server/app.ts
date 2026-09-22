@@ -120,6 +120,7 @@ const stepDefinitionSchema = z
 const workflowSchema = z
   .strictObject({
     allowSplit:z.boolean().optional(),
+    archived:z.boolean().optional(),
     id: idField,
     name: nameField,
     description: z.string().max(2000, 'must be at most 2000 characters'),
@@ -414,6 +415,16 @@ export async function createApp(config: AppConfig, options: CreateAppOptions = {
 
   app.get('/api/workflows', async () => store.listWorkflows());
 
+  app.patch<{ Params: { id: string } }>('/api/workflows/:id', async (request, reply) => {
+    const parsed = z.strictObject({ archived: z.boolean() }).safeParse(request.body);
+    if (!parsed.success) return sendError(reply, 400, 'Provide an archived boolean.');
+    const workflow = store.getWorkflow(request.params.id);
+    if (!workflow) return sendError(reply, 404, 'Workflow not found.');
+    const updated = { ...workflow, archived: parsed.data.archived, updatedAt: new Date().toISOString() };
+    store.saveWorkflow(updated);
+    return updated;
+  });
+
   app.put<{ Params: { id: string } }>('/api/workflows/:id', async (request, reply) => {
     const params = z.strictObject({ id: idField }).safeParse(request.params);
     if (!params.success) {
@@ -427,6 +438,7 @@ export async function createApp(config: AppConfig, options: CreateAppOptions = {
       return sendError(reply, 400, 'Workflow id in path does not match body id');
     }
     const workflow: Workflow = {
+      archived:store.getWorkflow(parsed.data.id)?.archived,
       allowSplit:parsed.data.allowSplit,
       id: parsed.data.id,
       name: parsed.data.name,

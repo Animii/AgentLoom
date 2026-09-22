@@ -351,7 +351,7 @@ export default function App() {
         <header className="page-head"><div><h1 className="page-title" tabIndex={-1}>Agents</h1><p className="page-lede">Manage provider connections and credentials.</p></div></header>
         <ProvidersView providers={providers} loading={providersLoading} onRefresh={() => { void loadProviders(); }} />
       </main>
-      <NewRunDialog crate={view==='crates'} open={dialogOpen} initialDemo={dialogInitialDemo} initialProject={dialogProject} workflows={workflows} projects={projects.filter(project => (!project.status || project.status === 'active') && project.available !== false)} onConnect={() => { setDialogOpen(false); setView('projects'); setConnectRequest(value => value + 1); }} onClose={() => setDialogOpen(false)} onCreated={handleCreated} onProjectCreated={project => { setProjects(previous => [...previous.filter(item => item.id !== project.id), project].sort((a, b) => a.name.localeCompare(b.name))); void loadProjects(); }} />
+      <NewRunDialog crate={view==='crates'} open={dialogOpen} initialDemo={dialogInitialDemo} initialProject={dialogProject} workflows={workflows.filter(workflow => !workflow.archived)} projects={projects.filter(project => (!project.status || project.status === 'active') && project.available !== false)} onConnect={() => { setDialogOpen(false); setView('projects'); setConnectRequest(value => value + 1); }} onClose={() => setDialogOpen(false)} onCreated={handleCreated} onProjectCreated={project => { setProjects(previous => [...previous.filter(item => item.id !== project.id), project].sort((a, b) => a.name.localeCompare(b.name))); void loadProjects(); }} />
     </div>
   );
 }
