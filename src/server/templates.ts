@@ -1,5 +1,21 @@
 import type { Workflow } from '../shared/types.js';
 
+// Delivery repositories own their validation contract through `npm run check`.
+function repositoryCheckedSteps(workflow: Workflow): Workflow['steps'] {
+  return structuredClone(workflow.steps).map((step) =>
+    step.validation
+      ? {
+          ...step,
+          validation: {
+            commands: [
+              { executable: 'npm', args: ['run', 'check'], timeoutMs: 600000 },
+            ],
+          },
+        }
+      : step,
+  );
+}
+
 const seededAt = new Date().toISOString();
 
 export const initialWorkflows: Workflow[] = [
@@ -199,6 +215,7 @@ initialWorkflows.push(evidenceWorkflow);
 
 export const crateWorkflow: Workflow = {
   ...structuredClone(evidenceWorkflow),
+  steps: repositoryCheckedSteps(evidenceWorkflow),
   id: 'crate-delivery',
   name: 'Crate delivery',
   allowSplit: true,
@@ -258,6 +275,7 @@ initialWorkflows.push(councilWorkflow);
 // A new template avoids changing existing runs or user-edited workflows.
 export const singleReviewWorkflow: Workflow = {
   ...structuredClone(evidenceWorkflow),
+  steps: repositoryCheckedSteps(evidenceWorkflow),
   id: 'single-review-delivery',
   name: 'PR machine',
   description:

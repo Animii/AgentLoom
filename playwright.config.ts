@@ -1,4 +1,5 @@
-﻿import { defineConfig } from '@playwright/test';
+import { defineConfig } from '@playwright/test';
+import { uiTarget } from './tests/support/ui-target.js';
 export default defineConfig({
   testDir: 'tests/ui',
   timeout: 60000,
@@ -7,7 +8,7 @@ export default defineConfig({
   workers: 1,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: process.env.E2E_BASE_URL ?? 'http://127.0.0.1:4317',
+    baseURL: uiTarget(process.env),
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     viewport: { width: 1440, height: 1000 },

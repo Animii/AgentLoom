@@ -1,24 +1,18 @@
-﻿import { test, expect } from '@playwright/test';
+import { createBrowserTestApp as createApp } from '../helpers/app-fixture.js';
+import { test, expect } from '@playwright/test';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 import assert from 'node:assert/strict';
 import type { AgentEvent } from '../../src/shared/types';
-
-type AppModule = typeof import('../../src/server/app.js');
-
-async function importDist<T>(relativePath: string): Promise<T> {
-  return (await import(pathToFileURL(path.resolve(relativePath)).href)) as T;
-}
 
 test('non-planning output shows live native calls and recovers historical Activity calls', async ({
   page,
 }) => {
   const root = await mkdtemp(path.join(tmpdir(), 'loom-native-ui-'));
   await mkdir(path.join(root, 'work/projects/welcome'), { recursive: true });
-  const { createApp } = await importDist<AppModule>('dist/server/app.js');
+
   let release!: () => void;
   const held = new Promise<void>((resolve) => {
     release = resolve;

@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { createApp } from '../src/server/app.js';
+import { createTestApp as createApp } from './helpers/app-fixture.js';
 
 void test('folder import publishes complete projects, rejects unsafe paths, preserves names and feeds a run', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'loom-import-'));

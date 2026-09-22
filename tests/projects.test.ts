@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { createApp } from '../src/server/app.js';
+import { createTestApp as createApp } from './helpers/app-fixture.js';
 import type { Run } from '../src/shared/types.js';
 
 void test('connected projects use original folders, isolated copies, persistent settings and safe lifecycle', async () => {

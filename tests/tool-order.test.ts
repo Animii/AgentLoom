@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { toolGroups } from '../src/client/ReplyWithTools.js';
 import type { PlanningToolCall, RunEvent } from '../src/shared/types.js';

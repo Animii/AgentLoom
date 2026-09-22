@@ -1,28 +1,22 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { createApp } from '../src/server/app.js';
+import {
+  createAppFixture,
+  createTestApp as createApp,
+} from './helpers/app-fixture.js';
 import type { ModelCatalog } from '../src/shared/model-catalog.js';
 import type { Run, Workflow } from '../src/shared/types.js';
 void test('HTTP workflow lifecycle, validation, snapshots, files and local-origin boundary', async (t) => {
-  const root = await mkdtemp(path.join(tmpdir(), 'loom-api-'));
-  const work = path.join(root, 'workspaces');
-  await mkdir(path.join(work, 'projects/sample'), { recursive: true });
-  await writeFile(path.join(work, 'projects/sample/README.md'), 'source');
   let calls = 0;
-  const app = await createApp(
-    {
-      dataDir: path.join(root, 'data'),
-      workspaceRoot: work,
-      host: '127.0.0.1',
-      port: 4317,
-      cliTimeoutMs: 1000,
-      maxOutputBytes: 10000,
-    },
-    {
+  const f = await createAppFixture(t, {
+    project: 'sample',
+    files: { 'README.md': 'source' },
+    config: { port: 4317 },
+    options: {
       serveStatic: false,
       execute: async (_s, p, w) => {
         calls++;
@@ -34,18 +28,12 @@ void test('HTTP workflow lifecycle, validation, snapshots, files and local-origi
         };
       },
     },
-  );
+  });
+  const { app } = f;
   const get = (url: string) => app.inject({ method: 'GET', url });
   const post = (url: string, payload: object = {}) =>
     app.inject({ method: 'POST', url, payload });
-  const wait = async (id: string, status: string) => {
-    for (let i = 0; i < 200; i++) {
-      const r = (await get('/api/runs/' + id)).json<Run>();
-      if (r.status === status) return r;
-      await delay(20);
-    }
-    throw new Error('Timed out ' + status);
-  };
+  const wait = f.wait;
   try {
     await t.test('local origin enforcement and strict schemas', async () => {
       assert.equal((await get('/api/health')).statusCode, 200);
@@ -221,8 +209,7 @@ void test('HTTP workflow lifecycle, validation, snapshots, files and local-origi
       assert.equal(old.steps[0].definition.name, workflow.steps[0].name);
     });
   } finally {
-    await app.close();
-    await rm(root, { recursive: true, force: true });
+    await f.close();
   }
 });
 

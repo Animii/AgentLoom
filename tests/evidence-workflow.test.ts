@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { createApp } from '../src/server/app.js';
+import { createTestApp as createApp } from './helpers/app-fixture.js';
 import { evidenceWorkflow } from '../src/server/templates.js';
 import { runValidationCommand } from '../src/server/validation.js';
 import type { Run } from '../src/shared/types.js';

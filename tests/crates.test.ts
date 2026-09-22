@@ -1,31 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-import { setTimeout as delay } from 'node:timers/promises';
-import { createApp } from '../src/server/app.js';
+import { createAppFixture } from './helpers/app-fixture.js';
 import { newCrate, triagePassed } from '../src/shared/crates.js';
 import type { Run } from '../src/shared/types.js';
 
 async function fixture() {
-  const root = await mkdtemp(path.join(tmpdir(), 'loom-crates-'));
-  await mkdir(path.join(root, 'work/projects/welcome'), { recursive: true });
   let snapshot: {
     state: 'OPEN' | 'MERGED';
     head: string;
     events: { id: string; head: string; kind: 'ci'; summary: string }[];
   } = { state: 'OPEN', head: 'a'.repeat(40), events: [] };
-  const app = await createApp(
-    {
-      dataDir: path.join(root, 'data'),
-      workspaceRoot: path.join(root, 'work'),
-      host: '127.0.0.1',
-      port: 0,
-      cliTimeoutMs: 1000,
-      maxOutputBytes: 10000,
-    },
-    {
+  const f = await createAppFixture(undefined, {
+    options: {
       serveStatic: false,
       execute: (step) =>
         Promise.resolve({
@@ -37,30 +23,21 @@ async function fixture() {
         }),
       readPr: () => Promise.resolve(snapshot),
     },
-  );
+  });
+  const { app } = f;
   const post = (id: string, action: string, body: object = {}) =>
     app.inject({
       method: 'POST',
       url: `/api/runs/${id}/${action}`,
       payload: body,
     });
-  const wait = async (id: string, status: string) => {
-    for (let i = 0; i < 200; i++) {
-      const run = app.store.getRun(id);
-      if (run && run.status === status) return run;
-      await delay(25);
-    }
-    throw Error(`Timed out waiting for ${status}`);
-  };
+  const wait = f.wait;
   return {
     app,
     post,
     wait,
     setSnapshot: (value: typeof snapshot) => (snapshot = value),
-    close: async () => {
-      await app.close();
-      await rm(root, { recursive: true, force: true });
-    },
+    close: f.close,
   };
 }
 void test('crate triage is durable, invalidates on new evidence and repairs through the implementer', async () => {

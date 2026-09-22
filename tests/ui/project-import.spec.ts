@@ -1,3 +1,4 @@
+import { createBrowserTestApp as createApp } from '../helpers/app-fixture.js';
 import { test, expect } from '@playwright/test';
 import {
   mkdtemp,
@@ -9,13 +10,6 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-
-type AppModule = typeof import('../../src/server/app.js');
-
-async function importDist<T>(relativePath: string): Promise<T> {
-  return (await import(pathToFileURL(path.resolve(relativePath)).href)) as T;
-}
 
 test('select a folder, import a project, preserve run draft and start a run from its source', async ({
   page,
@@ -28,7 +22,7 @@ test('select a folder, import a project, preserve run draft and start a run from
   await writeFile(path.join(source, 'README.md'), 'Folder picker project');
   await writeFile(path.join(source, '.env'), 'SECRET=never-import');
   await writeFile(path.join(source, 'node_modules/dependency.txt'), 'excluded');
-  const { createApp } = await importDist<AppModule>('dist/server/app.js');
+
   const work = path.join(root, 'work');
   const app = await createApp({
     dataDir: path.join(root, 'data'),

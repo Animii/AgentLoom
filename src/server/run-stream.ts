@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import type { Store } from './store.js';
+import type { RunRepository } from './ports/repository.js';
 
-export function registerRunStream(app: FastifyInstance, store: Store) {
+export function registerRunStream(app: FastifyInstance, store: RunRepository) {
   const connections = new Set<() => void>();
   app.addHook('preClose', () => {
     for (const close of connections) close();

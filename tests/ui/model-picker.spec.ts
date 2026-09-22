@@ -1,20 +1,9 @@
+import { createAppFixture } from '../helpers/app-fixture.js';
 import { test, expect } from '@playwright/test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 import type { ProviderId } from '../../src/shared/types.js';
 import type { ModelCatalog } from '../../src/shared/model-catalog.js';
-
-type AppModule = typeof import('../../src/server/app.js');
-
-async function importAppModule(): Promise<AppModule> {
-  return (await import(
-    pathToFileURL(path.resolve('dist/server/app.js')).href
-  )) as AppModule;
-}
 
 function discovered(
   provider: ProviderId,
@@ -37,9 +26,6 @@ async function startApp(
   holdCodex: () => Promise<void>,
   failCodex: () => boolean,
 ) {
-  const root = await mkdtemp(path.join(tmpdir(), 'loom-model-ui-'));
-  await mkdir(path.join(root, 'work/projects/welcome'), { recursive: true });
-  const { createApp } = await importAppModule();
   const codexModels = [
     { id: 'gpt-5.6-sol', label: 'Sol' },
     { id: 'gpt-6-astra', label: 'Astra' },
@@ -55,16 +41,10 @@ async function startApp(
     { id: 'opencode/gpt-5.1-codex' },
     { id: 'deepseek/deepseek-flash' },
   ]);
-  const app = await createApp(
-    {
-      dataDir: path.join(root, 'data'),
-      workspaceRoot: path.join(root, 'work'),
-      host: '127.0.0.1',
-      port: 0,
-      cliTimeoutMs: 10000,
-      maxOutputBytes: 10000,
-    },
-    {
+  const f = await createAppFixture(undefined, {
+    built: true,
+    config: { cliTimeoutMs: 10000, maxOutputBytes: 10000 },
+    options: {
       execute: () =>
         Promise.resolve({
           output: 'Completed.',
@@ -80,7 +60,8 @@ async function startApp(
         return opencode;
       },
     },
-  );
+  });
+  const { app } = f;
   const workflow = app.store.getWorkflow('quick-review');
   assert.ok(workflow);
   workflow.steps = [
@@ -88,23 +69,14 @@ async function startApp(
   ];
   app.store.saveWorkflow(workflow);
   const address = await app.listen({ port: 0, host: '127.0.0.1' });
-  return { app, root, address };
-}
-
-async function stopApp(
-  app: { server: { closeAllConnections(): void }; close(): Promise<void> },
-  root: string,
-) {
-  app.server.closeAllConnections();
-  await app.close();
-  await rm(root, { recursive: true, force: true });
+  return { app, address, close: f.close };
 }
 
 test('model picker covers discovered models, keyboard selection, custom ids, CLI default and fallback', async ({
   page,
 }) => {
   const state = { fail: false };
-  const { app, root, address } = await startApp(
+  const { app, close, address } = await startApp(
     async () => {},
     () => state.fail,
   );
@@ -218,7 +190,7 @@ test('model picker covers discovered models, keyboard selection, custom ids, CLI
     await expect(combo).toHaveValue('gpt-5.6-sol');
   } finally {
     await page.goto('about:blank');
-    await stopApp(app, root);
+    await close();
   }
 });
 
@@ -239,7 +211,7 @@ test('late catalogs, provider switches and refresh never overwrite the saved sel
     releaseGate = null;
     return current;
   };
-  const { app, root, address } = await startApp(
+  const { app, close, address } = await startApp(
     async () => {
       if (gate) await gate;
     },
@@ -311,14 +283,14 @@ test('late catalogs, provider switches and refresh never overwrite the saved sel
   } finally {
     void open();
     await page.goto('about:blank');
-    await stopApp(app, root);
+    await close();
   }
 });
 
 test('optional second opinion uses provider suggestions and survives edits to the primary reviewer', async ({
   page,
 }) => {
-  const { app, root, address } = await startApp(
+  const { app, close, address } = await startApp(
     async () => {},
     () => false,
   );
@@ -391,14 +363,14 @@ test('optional second opinion uses provider suggestions and survives edits to th
     expect(opinion.model).toBe('acme/custom-second');
   } finally {
     await page.goto('about:blank');
-    await stopApp(app, root);
+    await close();
   }
 });
 
 test('council reviewer fields offer their provider suggestions and keep models explicit', async ({
   page,
 }) => {
-  const { app, root, address } = await startApp(
+  const { app, close, address } = await startApp(
     async () => {},
     () => false,
   );
@@ -519,6 +491,6 @@ test('council reviewer fields offer their provider suggestions and keep models e
     expect(finalReviewers[0].model).toBe('sonnet');
   } finally {
     await page.goto('about:blank');
-    await stopApp(app, root);
+    await close();
   }
 });

@@ -1,3 +1,4 @@
+import { localGitEffects } from './helpers/local-git.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
@@ -6,7 +7,7 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
-import { createApp } from '../src/server/app.js';
+import { createTestApp as createApp } from './helpers/app-fixture.js';
 import {
   councilWorkflow,
   singleReviewWorkflow,
@@ -76,6 +77,7 @@ async function fixture(
       maxOutputBytes: 100000,
     },
     {
+      ...localGitEffects,
       serveStatic: false,
       publishPr: (run) => {
         publishes++;
@@ -574,6 +576,7 @@ void test('server restart pauses authorized automation without rerunning agents'
         maxOutputBytes: 100000,
       },
       {
+        ...localGitEffects,
         serveStatic: false,
         execute: () => Promise.reject(Error('Restart must not execute agents')),
       },

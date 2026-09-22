@@ -1,3 +1,4 @@
+import { createBrowserTestApp as createApp } from '../helpers/app-fixture.js';
 import { test, expect } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
@@ -7,7 +8,6 @@ import { pathToFileURL } from 'node:url';
 
 import type { AgentEvent } from '../../src/shared/types.js';
 
-type AppModule = typeof import('../../src/server/app.js');
 type TemplatesModule = typeof import('../../src/server/templates.js');
 
 async function importDist<T>(relativePath: string): Promise<T> {
@@ -20,7 +20,7 @@ test('council shows independent findings, focused challenge, reload and human ap
   const root = await mkdtemp(path.join(tmpdir(), 'loom-council-ui-'));
   await mkdir(path.join(root, 'work/projects/sample'), { recursive: true });
   await writeFile(path.join(root, 'work/projects/sample/app.txt'), 'fixed');
-  const { createApp } = await importDist<AppModule>('dist/server/app.js');
+
   const { councilWorkflow } = await importDist<TemplatesModule>(
     'dist/server/templates.js',
   );
@@ -206,7 +206,7 @@ test('reviewer and chair text and separated tool groups stream before completion
   const root = await mkdtemp(path.join(tmpdir(), 'loom-council-stream-'));
   await mkdir(path.join(root, 'work/projects/sample'), { recursive: true });
   await writeFile(path.join(root, 'work/projects/sample/app.txt'), 'fixed');
-  const { createApp } = await importDist<AppModule>('dist/server/app.js');
+
   const { councilWorkflow } = await importDist<TemplatesModule>(
     'dist/server/templates.js',
   );

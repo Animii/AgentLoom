@@ -15,7 +15,9 @@ package-lock.json
 .auth/
 
 # Historical research, pilot and evaluation records
-docs/
+docs/*
+!docs/TESTING.md
+!docs/ARCHITECTURE.md
 
 # Pilot scripts and prohibited untracked research tooling
 scripts/pilots/

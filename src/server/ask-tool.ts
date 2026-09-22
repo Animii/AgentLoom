@@ -1,36 +1,11 @@
 import { createServer } from 'node:http';
-import { randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { askSchema } from '../shared/ask-schema.js';
+export { askSchema } from '../shared/ask-schema.js';
 import type { PlanningQuestion, PlanningToolCall } from '../shared/types.js';
 import { toolInput, projectToolSummary } from './tool-activity.js';
 import { createProjectTools, PROJECT_TOOL_NAMES } from './project-tools.js';
-
-export const askSchema = z.strictObject({
-  questions: z
-    .array(
-      z.strictObject({
-        question: z.string().trim().min(1).max(500),
-        header: z.string().trim().min(1).max(40).optional(),
-        multiSelect: z.boolean().optional(),
-        options: z
-          .array(
-            z.union([
-              z.string().trim().min(1).max(120),
-              z.strictObject({
-                label: z.string().trim().min(1).max(120),
-                description: z.string().trim().min(1).max(300).optional(),
-                recommended: z.boolean().optional(),
-              }),
-            ]),
-          )
-          .min(2)
-          .max(4)
-          .optional(),
-      }),
-    )
-    .min(1)
-    .max(3),
-});
 
 // Turn-scoped MCP tools; filesystem access is read-only and rooted in this run's project.
 export async function createAskTool(

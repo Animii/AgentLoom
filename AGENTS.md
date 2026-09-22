@@ -11,6 +11,16 @@ Install pinned dependencies from the lockfile with `npm ci --include=dev`. Run `
 
 Formatting is owned by Prettier (`.prettierrc.json`, LF) and the maintained scope is `src/**`, `tests/**`, the TypeScript project files and supported `scripts/` entries; generated output, dependencies, workspaces, artifacts, credentials and historical research paths are excluded. `.gitattributes` and `.editorconfig` keep LF on checkout, including Windows with `core.autocrlf=true`. Editor settings in `.vscode/` select Prettier and ESLint; format-on-save is optional.
 
-Top-level `node:test` registrations in `tests/*.test.ts` use an explicit `void test(...)` because the runner owns their lifecycle. Nested `t.test(...)` subtests and every other promise must be awaited; there is no rule-wide runner exemption.
+Top-level `node:test` registrations in `tests/*.test.ts` use an explicit `void test(...)` because the runner owns their lifecycle. Await nested `t.test(...)` subtests and handle other promises explicitly; there is no rule-wide runner exemption.
+
+## Boundaries and tests
+
+Keep workflow decisions in pure shared policy. The Engine consumes application-owned ports; real SQLite, provider, workspace, Git/GitHub, validation and council effects are assembled at the runtime composition boundary. Do not import concrete adapters into shared policy or the Engine. The linter enforces these boundaries. See `docs/ARCHITECTURE.md` before adding a new effect.
+
+Use the reusable helpers in `tests/helpers/` for new app tests. Default tests must use fake providers and explicit fake external services. Unexpected provider, Jev or GitHub calls must fail clearly. Use in-memory repository tests for decisions and real temporary adapters for integration contracts. Keep fixture files inside test-owned temporary directories and register cleanup before setup can fail.
+
+`npm run test:unit` runs focused pure tests; `npm run test:integration` includes the remaining backend tests. `npm test` includes both. `npm run test:watch` and `npm run test:coverage` support local iteration. See `docs/TESTING.md` for copyable examples and coverage limitations.
+
+Run `npm run test:ui` for UI or workflow interaction changes. Its harness creates an isolated application, workspace and fake services, and cleans up afterward. Do not supply a production `E2E_BASE_URL` or reuse a running app. Crate delivery and PR machine validate through the repository's `npm run check` script; do not weaken that script or a run's approved validation contract to make a task pass.
 
 Validate the Docker Compose application before delivery with an isolated project name, fresh disposable storage, no live provider keys and a non-4317 port; never replace the running platform. Bind paths resolve on the Docker host, so map container paths with `docker inspect $AGENTLOOM_PLATFORM_CONTAINER` first. `MAX_OUTPUT_BYTES` is documented in `.env.example` and the README; keep it finite.

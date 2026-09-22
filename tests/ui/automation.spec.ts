@@ -1,3 +1,5 @@
+import { localGitEffects } from '../helpers/local-git.js';
+import { createBrowserTestApp as createApp } from '../helpers/app-fixture.js';
 import { test, expect } from '@playwright/test';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -7,7 +9,6 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { Run } from '../../src/shared/types';
 
-type AppModule = typeof import('../../src/server/app.js');
 type TemplatesModule = typeof import('../../src/server/templates.js');
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -38,7 +39,7 @@ test('PR machine opt-in, plan authorization, uncertainty recovery and automatic 
     'origin',
     'https://github.com/fixture/project.git',
   ]);
-  const { createApp } = await importDist<AppModule>('dist/server/app.js');
+
   const { councilWorkflow } = await importDist<TemplatesModule>(
     'dist/server/templates.js',
   );
@@ -56,6 +57,7 @@ test('PR machine opt-in, plan authorization, uncertainty recovery and automatic 
       maxOutputBytes: 100000,
     },
     {
+      ...localGitEffects,
       publishPr: (run: Run) => {
         expect(run.git?.approvedTree).toMatch(/^[a-f0-9]{40}$/);
         published++;

@@ -1,3 +1,5 @@
+import { localGitEffects } from '../helpers/local-git.js';
+import { createBrowserTestApp as createApp } from '../helpers/app-fixture.js';
 import { test, expect } from '@playwright/test';
 import { mkdtemp, mkdir, rm, writeFile, readFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
@@ -8,7 +10,6 @@ import { pathToFileURL } from 'node:url';
 
 import type { AppConfig, Run } from '../../src/shared/types';
 
-type AppModule = typeof import('../../src/server/app.js');
 type GitWorkspacesModule = typeof import('../../src/server/git-workspaces.js');
 type PublishInput = Parameters<GitWorkspacesModule['publishDraftPr']>[2];
 
@@ -40,7 +41,7 @@ test('worktree run requires approval, reviews diff, creates draft PR and retains
     'origin',
     'https://github.com/fixture/project.git',
   );
-  const { createApp } = await importDist<AppModule>('dist/server/app.js');
+
   const { publishDraftPr } = await importDist<GitWorkspacesModule>(
     'dist/server/git-workspaces.js',
   );
@@ -56,6 +57,7 @@ test('worktree run requires approval, reviews diff, creates draft PR and retains
       maxOutputBytes: 10000,
     },
     {
+      ...localGitEffects,
       execute: async (
         s: { access: string },
         prompt: string,

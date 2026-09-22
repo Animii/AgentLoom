@@ -1,3 +1,4 @@
+import { createBrowserTestApp as createApp } from '../helpers/app-fixture.js';
 import { test, expect } from '@playwright/test';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -5,7 +6,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import assert from 'node:assert/strict';
-type AppModule = typeof import('../../src/server/app.js');
+
 type TemplatesModule = typeof import('../../src/server/templates.js');
 
 async function importDist<T>(relativePath: string): Promise<T> {
@@ -18,7 +19,7 @@ test('evidence workflow exposes real failed commands, repairs, and requires fina
   const root = await mkdtemp(path.join(tmpdir(), 'loom-evidence-ui-'));
   await mkdir(path.join(root, 'work/projects/sample'), { recursive: true });
   await writeFile(path.join(root, 'work/projects/sample/app.txt'), 'original');
-  const { createApp } = await importDist<AppModule>('dist/server/app.js');
+
   const { evidenceWorkflow } = await importDist<TemplatesModule>(
     'dist/server/templates.js',
   );

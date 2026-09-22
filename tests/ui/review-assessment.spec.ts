@@ -1,18 +1,13 @@
-﻿import { test, expect } from '@playwright/test';
+import { createBrowserTestApp as createApp } from '../helpers/app-fixture.js';
+import { test, expect } from '@playwright/test';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 import assert from 'node:assert/strict';
-type AppModule = typeof import('../../src/server/app.js');
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
-}
-
-async function importDist<T>(relativePath: string): Promise<T> {
-  return (await import(pathToFileURL(path.resolve(relativePath)).href)) as T;
 }
 
 for (const uncertain of [false, true])
@@ -21,7 +16,7 @@ for (const uncertain of [false, true])
   }) => {
     const root = await mkdtemp(path.join(tmpdir(), 'loom-jev-review-ui-'));
     await mkdir(path.join(root, 'work/projects/welcome'), { recursive: true });
-    const { createApp } = await importDist<AppModule>('dist/server/app.js');
+
     const app = await createApp(
       {
         dataDir: path.join(root, 'data'),

@@ -1,22 +1,17 @@
-﻿import { test, expect } from '@playwright/test';
+import { createBrowserTestApp as createApp } from '../helpers/app-fixture.js';
+import { test, expect } from '@playwright/test';
 import { mkdtemp, mkdir, rm, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+
 import type { StepDefinition } from '../../src/shared/types';
-
-type AppModule = typeof import('../../src/server/app.js');
-
-async function importDist<T>(relativePath: string): Promise<T> {
-  return (await import(pathToFileURL(path.resolve(relativePath)).href)) as T;
-}
 
 test('send review blockers to implementer, retain history and approve fresh review', async ({
   page,
 }) => {
   const root = await mkdtemp(path.join(tmpdir(), 'loom-rework-ui-'));
   await mkdir(path.join(root, 'work/projects/welcome'), { recursive: true });
-  const { createApp } = await importDist<AppModule>('dist/server/app.js');
+
   let builds = 0;
   let reviews = 0;
   const app = await createApp(

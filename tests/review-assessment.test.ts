@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { createApp } from '../src/server/app.js';
+import { createTestApp as createApp } from './helpers/app-fixture.js';
 import type { Run } from '../src/shared/types.js';
 
 void test('Jev classifies a completed review without changing workflow state; stale and failed responses stay advisory', async () => {

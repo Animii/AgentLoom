@@ -1,3 +1,4 @@
+import type { Repository } from './ports/repository.js';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -39,7 +40,7 @@ interface CountRow {
   count: number | bigint;
 }
 
-export class Store {
+export class Store implements Repository {
   private readonly db: DatabaseSync;
   private readonly listeners = new Map<string, Set<() => void>>();
 

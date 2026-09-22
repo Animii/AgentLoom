@@ -102,6 +102,10 @@ test('overview prioritizes attention, shows honest progress, filters and updates
 
   running.status = 'waiting_approval';
   running.steps[1].status = 'waiting_approval';
+  // Polling keeps an equally/newer cached run, so simulate the server's version bump.
+  running.updatedAt = new Date(
+    Date.parse(running.updatedAt) + 1000,
+  ).toISOString();
   await expect(attention.locator('.run-card')).toHaveCount(3);
   await expect(active).toContainText('No agents working right now.');
   await page.getByLabel('Filter by mode').selectOption('live');

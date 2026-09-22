@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Run } from '../shared/types.js';
 import { councilReviews } from '../shared/council.js';
-import type { Store } from './store.js';
+import type { RunRepository } from './ports/repository.js';
 import type { Engine } from './engine.js';
 import type { registerJev } from './jev.js';
 import { sourceFingerprint } from './validation.js';
@@ -32,7 +32,7 @@ export class Automation {
   private timer: ReturnType<typeof setInterval>;
   private closed = false;
   constructor(
-    private store: Store,
+    private store: RunRepository,
     private engine: Engine,
     private evaluate: ReturnType<typeof registerJev>,
     private publish: (id: string) => Promise<unknown>,

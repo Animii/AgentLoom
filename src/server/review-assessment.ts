@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
-import type { Store } from './store.js';
+import type { RunRepository } from './ports/repository.js';
 import type { ReviewAssessment } from '../shared/types.js';
 import { canAssessReview } from '../shared/review-assessment.js';
 import type { registerJev } from './jev.js';
 
 export function createReviewAssessor(
-  store: Store,
+  store: RunRepository,
   evaluate: ReturnType<typeof registerJev>,
 ) {
   // A process restart cannot resume an in-flight HTTP evaluation.

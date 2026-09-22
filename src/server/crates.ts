@@ -1,3 +1,4 @@
+import type { GitEffects } from './ports/execution.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppConfig, Run } from '../shared/types.js';
@@ -13,7 +14,8 @@ function isCrateRun(run: Run | undefined): run is CrateRun {
 export function registerCrates(
   app: FastifyInstance,
   config: AppConfig,
-  readPr = readCratePr,
+  readPr: GitEffects['readPr'] = readCratePr,
+  joinGit: GitEffects['join'] = joinCrateWorktrees,
 ) {
   const busy = new Set<string>(),
     jobs = new Set<Promise<unknown>>();
@@ -148,8 +150,7 @@ export function registerCrates(
           try {
             for (const child of children)
               await app.engine.assertValidationCurrent(child.id);
-            if (parent.mode === 'live')
-              await joinCrateWorktrees(parent, children, config);
+            if (parent.mode === 'live') await joinGit(parent, children, config);
             const latest = requireCrateRun(parent.id);
             latest.crate.join = 'joined';
             latest.crate.joining = false;

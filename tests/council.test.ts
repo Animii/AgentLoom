@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { createApp } from '../src/server/app.js';
+import { createTestApp as createApp } from './helpers/app-fixture.js';
 import { councilWorkflow } from '../src/server/templates.js';
 import {
   parseCouncilReport,
@@ -642,7 +642,8 @@ void test('interrupted council retry preserves partial history and starts fresh 
     assert.ok(interrupted);
     assert.equal(interrupted.status, 'interrupted');
     assert.ok(interrupted.steps[3].council);
-    const { Engine } = await import('../src/server/engine.js');
+    const { createRuntimeEngine } =
+      await import('../src/server/engine-runtime.js');
     const config = {
       dataDir: path.join(f.root, 'data'),
       workspaceRoot: path.join(f.root, 'work'),
@@ -651,7 +652,7 @@ void test('interrupted council retry preserves partial history and starts fresh 
       cliTimeoutMs: 1000,
       maxOutputBytes: 100000,
     };
-    const retryEngine = new Engine(f.app.store, config, (step) =>
+    const retryEngine = createRuntimeEngine(f.app.store, config, (step) =>
       Promise.resolve({
         output: JSON.stringify(
           step.id === 'council-chair'
@@ -730,8 +731,9 @@ void test('retrying an interrupted challenge retains original blockers and consu
     );
     await f.app.engine.shutdown();
     assert.equal(f.app.store.getRun(run.id)?.status, 'interrupted');
-    const { Engine } = await import('../src/server/engine.js');
-    const retry = new Engine(
+    const { createRuntimeEngine } =
+      await import('../src/server/engine-runtime.js');
+    const retry = createRuntimeEngine(
       f.app.store,
       {
         dataDir: path.join(f.root, 'data'),
@@ -802,9 +804,10 @@ for (const phase of ['initial', 'challenge', 'stale_challenge'])
         assert.ok(staleRun);
         await writeFile(path.join(staleRun.workspace, 'extra.txt'), 'changed');
       }
-      const { Engine } = await import('../src/server/engine.js');
+      const { createRuntimeEngine } =
+        await import('../src/server/engine-runtime.js');
       const executed: string[] = [];
-      const retry = new Engine(
+      const retry = createRuntimeEngine(
         f.app.store,
         {
           dataDir: path.join(f.root, 'data'),
@@ -953,8 +956,9 @@ void test('hard restart replaces stale running reviewer indicators while preserv
     evidence.reviewers[1].output = 'Partial text survives';
     required(evidence.chair, 'council chair').status = 'running';
     f.app.store.saveRun(run);
-    const { Engine } = await import('../src/server/engine.js');
-    const recovered = new Engine(
+    const { createRuntimeEngine } =
+      await import('../src/server/engine-runtime.js');
+    const recovered = createRuntimeEngine(
       f.app.store,
       {
         dataDir: path.join(f.root, 'data'),

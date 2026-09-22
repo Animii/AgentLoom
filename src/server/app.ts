@@ -1,6 +1,5 @@
 import { assessValidation } from './validation.js';
 import { registerCrates } from './crates.js';
-import { readCratePr } from './git-workspaces.js';
 import { Automation } from './automation.js';
 import { previewRunGit, publishDraftPr } from './git-workspaces.js';
 import { canAssessReview } from '../shared/review-assessment.js';
@@ -23,7 +22,10 @@ import {
   suggestedCatalog,
   type ModelCatalog,
 } from '../shared/model-catalog.js';
-import { Engine } from './engine.js';
+import type { Engine } from './engine.js';
+import { createRuntimeEngine } from './engine-runtime.js';
+import type { Repository } from './ports/repository.js';
+import type { EngineEffects, GitEffects } from './ports/execution.js';
 import { ModelCatalogService, type DiscoverModels } from './model-catalog.js';
 import { registerRunStream } from './run-stream.js';
 import { registerProjectImports } from './project-import.js';
@@ -40,17 +42,25 @@ import {
 
 declare module 'fastify' {
   interface FastifyInstance {
-    store: Store;
+    store: Repository;
     engine: Engine;
   }
 }
 
 export interface CreateAppOptions {
-  readPr?: typeof readCratePr;
+  logger?: boolean;
+  getProviders?: (config: AppConfig) => Promise<ProviderInfo[]>;
+  /** The application owns and closes an injected repository. */
+  repository?: Repository;
+  engineEffects?: Partial<EngineEffects>;
+  previewGit?: GitEffects['preview'];
+  joinGit?: GitEffects['join'];
+  prepareGit?: GitEffects['prepare'];
+  readPr?: GitEffects['readPr'];
   execute?: ExecuteAgent;
   serveStatic?: boolean;
   jevFetch?: typeof fetch;
-  publishPr?: typeof publishDraftPr;
+  publishPr?: GitEffects['publishPr'];
   discoverModels?: DiscoverModels;
 }
 
@@ -503,8 +513,11 @@ export async function createApp(
   config: AppConfig,
   options: CreateAppOptions = {},
 ): Promise<FastifyInstance> {
-  const app = Fastify({ logger: true, bodyLimit: BODY_LIMIT_BYTES });
-  const store = new Store(config.dataDir);
+  const app = Fastify({
+    logger: options.logger ?? true,
+    bodyLimit: BODY_LIMIT_BYTES,
+  });
+  const store = options.repository ?? new Store(config.dataDir);
   for (const run of store.listRuns())
     if (run.git?.publishing) {
       run.git.publishing = false;
@@ -512,13 +525,22 @@ export async function createApp(
     }
   const publishing = new Map<string, Promise<unknown>>();
   const projects = new Projects(store, config);
-  const engine = new Engine(
+  const previewGit =
+    options.previewGit ?? options.engineEffects?.previewRunGit ?? previewRunGit;
+  const engine = createRuntimeEngine(
     store,
     config,
     options.execute ?? createExecutor(config),
     projects,
     (id, stepId) => assessor.assess(id, stepId),
     (run, evidence) => assessValidation(run, evidence, evaluateJev),
+    {
+      ...options.engineEffects,
+      previewRunGit: previewGit,
+      ...(options.prepareGit
+        ? { prepareGitWorkspace: options.prepareGit }
+        : {}),
+    },
   );
   app.decorate('store', store);
   app.decorate('engine', engine);
@@ -608,7 +630,7 @@ export async function createApp(
     store.saveRun(run);
     const job = (async () => {
       await engine.assertValidationCurrent(id);
-      const preview = await previewRunGit(run, config);
+      const preview = await previewGit(run, config);
       if (!run.git?.approvedTree || preview.tree !== run.git.approvedTree)
         throw Error(
           'Files changed after approval. Revalidate and approve the current files.',
@@ -654,7 +676,12 @@ export async function createApp(
   const automation = new Automation(store, engine, evaluateJev, (id) =>
     publish(id),
   );
-  const closeCrates = registerCrates(app, config, options.readPr);
+  const closeCrates = registerCrates(
+    app,
+    config,
+    options.readPr,
+    options.joinGit,
+  );
   app.addHook('preHandler', async (request, reply) => {
     if (request.method !== 'POST') return;
     const match = /^\/api\/runs\/([^/]+)\//.exec(request.url);
@@ -829,7 +856,7 @@ export async function createApp(
   app.get('/api/providers', async () => {
     const now = Date.now();
     if (providersCache === null || providersCache.expiresAt <= now) {
-      const value = await getProviders(config);
+      const value = await (options.getProviders ?? getProviders)(config);
       providersCache = { expiresAt: Date.now() + PROVIDERS_CACHE_MS, value };
     }
     return providersCache.value;
@@ -918,7 +945,7 @@ export async function createApp(
       const run = store.getRun(request.params.id);
       if (!run) return sendError(reply, 404, 'Run not found');
       try {
-        return await previewRunGit(run, config);
+        return await previewGit(run, config);
       } catch (error) {
         return sendError(reply, 409, errorMessage(error));
       }

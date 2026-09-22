@@ -1,3 +1,4 @@
+import { createBrowserTestApp as createApp } from '../helpers/app-fixture.js';
 import { test, expect } from '@playwright/test';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -7,7 +8,6 @@ import { pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 import type { AgentEvent } from '../../src/shared/types';
 
-type AppModule = typeof import('../../src/server/app.js');
 type TemplatesModule = typeof import('../../src/server/templates.js');
 
 async function importDist<T>(relativePath: string): Promise<T> {
@@ -20,7 +20,7 @@ test('default single review streams openly, second opinion preserves history and
   const root = await mkdtemp(path.join(tmpdir(), 'loom-single-ui-'));
   await mkdir(path.join(root, 'work/projects/sample'), { recursive: true });
   await writeFile(path.join(root, 'work/projects/sample/app.txt'), 'fixed');
-  const { createApp } = await importDist<AppModule>('dist/server/app.js');
+
   const { singleReviewWorkflow } = await importDist<TemplatesModule>(
     'dist/server/templates.js',
   );

@@ -64,11 +64,11 @@ Demo runs are explicitly labeled and do not execute CLIs or make file changes.
 
 This is a **trusted, single-user local platform**, not a multi-tenant service. Compose publishes only to `127.0.0.1`; the API also validates Host/Origin, rejects unknown request fields, and restricts file browsing to run directories. Do not expose it through a public reverse proxy without adding authentication and stronger isolation.
 
-Agents run as the non-root `node` user. Claude and OpenCode receive file tools with shell/subagent access disabled. Codex uses its `read-only` or `workspace-write` sandbox and never automatically approves escalation. Compose relaxes the outer seccomp/AppArmor profiles so Codex can construct its inner bubblewrap sandbox; it does not use privileged mode or add Linux capabilities. On hosts that forbid unprivileged user namespaces, Codex may still need host configuration.
+Agents run as the non-root `node` user with the full shell access authorized for this local runner. Claude and OpenCode can use Bash; Codex runs with `danger-full-access` and CLI approval disabled. The production Compose service connects the host Docker daemon. Planning, design and review roles must preserve project source, while implementation may change source within the approved task. Those role rules and handoff approvals are workflow controls, not operating-system isolation. See `src/server/execution-policy.ts` for the instructions sent to every agent.
 
 Run copies are separate folders, not separate OS/container identities. The agents share a container user, runtime and credential volume. Do not use this v1 for adversarial repositories, mutually untrusted users, or strict per-agent data isolation. Approval gates control handoffs; they cannot undo an already executed step or prove its claims. Review the output and tests before approving.
 
-CLI processes use argument arrays without a shell, a ten-minute default timeout, an output cap, and owned-process cancellation. Nonzero exits, malformed streams, empty output and reported output-length truncation fail the step. Provider-reported cost is shown where supplied; missing cost is not zero.
+CLI processes use argument arrays without a shell, a one-hour default total timeout, an output cap, and owned-process cancellation. Nonzero exits, malformed streams, empty output and reported output-length truncation fail the step. Provider-reported cost is shown where supplied; missing cost is not zero.
 
 ## Development and verification
 
@@ -99,7 +99,7 @@ npm start
 Run `npm run check` before delivery; the TypeScript strict flag stays enabled.
 Top-level `node:test` registrations in `tests/*.test.ts` use an explicit
 `void test(...)` because the runner owns their lifecycle. Nested `t.test(...)`
-subtests and every other promise must be awaited.
+subtests must be awaited, and other promises must be handled explicitly.
 
 For hot reload run `npm run dev` and `npm run dev:web` in separate terminals; Vite uses port 5173 and proxies the API to 4317. Stop the Compose service first if using the same API port.
 
@@ -125,27 +125,36 @@ data. Use a unique project name if another validation stack exists; port 4318 mu
 be free. The final command removes only that validation project's volumes. Open
 http://localhost:4318 and use demo mode for manual smoke checks.
 
-Browser tests currently require a separate disposable development server. For
-the model-picker and workflow-archive specs, which start their own temporary
-servers, use this explicit target (PowerShell):
+The test helpers provide disposable app fixtures, scripted agents, bounded waits,
+and explicit fake external services. Workflow policy can run against an in-memory
+repository; adapter contracts exercise temporary SQLite and Git repositories.
 
 ```sh
-npx playwright install chromium
-$env:E2E_BASE_URL = 'http://127.0.0.1:4318'
-npm run test:ui -- tests/ui/model-picker.spec.ts tests/ui/workflow-archive.spec.ts
-Remove-Item Env:E2E_BASE_URL
+npm run test:unit
+npm run test:integration
+npm run test:watch
+npm run test:coverage
+npm run test:ui
+npm run test:ui:docker
 ```
 
-Do not run the full browser suite against production. Shared-server specs create
-demo runs and edit workflows; the recovery spec also needs `E2E_WORKSPACE_ROOT`
-to be the same directory visible to both the test process and its disposable
-server. The standalone validation stack deliberately has no host workspace mount,
-so it is not a target for that recovery spec. The next test-infrastructure
-milestone replaces this manual setup with a self-starting isolated runner.
-`node scripts/live-smoke.mjs` creates three real provider tasks, including a small
-file write by Flash, and leaves their results for review; it requires
-authentication and incurs normal usage. An exit-zero CLI or waiting approval
-alone does not establish task correctness: inspect its output and files.
+The browser command builds the app, starts a fresh temporary server on an assigned
+local port, and cleans up its database and workspace when it finishes. It does not
+reuse the running platform; caller-supplied `E2E_BASE_URL` and workspace overrides
+are rejected. Install Chromium with `npx playwright install chromium` for native
+browser tests, or use the Docker browser command for matching Linux libraries.
+CI runs the checks and browser suite without provider credentials.
+
+See [Testing](docs/TESTING.md) for focused commands, fixture examples and coverage
+interpretation, and [Architecture](docs/ARCHITECTURE.md) for policy and adapter
+boundaries. Crate delivery and PR machine record `npm run check`, so future
+AgentLoom tasks must pass formatting, lint, types, backend tests and build before
+review. Browser tests remain an additional gate for interaction changes.
+
+Scripts such as `node scripts/live-smoke.mjs` are separate live experiments: they
+create provider tasks, require authentication, and may incur charges. They are
+not part of the default test commands. An exit-zero CLI or waiting approval alone
+does not establish task correctness; inspect the output and recorded evidence.
 
 `node scripts/start-pilot.mjs` starts the four-stage live slug-utility pilot and leaves each handoff for manual review. `node scripts/check-restart.mjs <waiting-run-id>` tests restart recovery and approval persistence by restarting the entire Compose service; use only when other work may safely be interrupted.
 

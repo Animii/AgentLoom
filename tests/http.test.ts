@@ -1,9 +1,9 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import { createApp } from '../src/server/app.js';
+import { createTestApp as createApp } from './helpers/app-fixture.js';
 import type { Run } from '../src/shared/types.js';
 void test('real HTTP responses complete with headers, including unknown routes', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'loom-http-'));

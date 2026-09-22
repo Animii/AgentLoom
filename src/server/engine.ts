@@ -12,28 +12,21 @@ import {
   triageKey,
 } from '../shared/crates.js';
 import { automationContract } from './automation-contract.js';
-import { writeEvidencePacket } from './evidence-packet.js';
 import {
-  runCouncil,
   councilSummary,
-  assertCouncilCurrent,
   approvedReviewCriteria,
-} from './council.js';
+} from '../shared/council-policy.js';
 import { councilReady } from '../shared/council.js';
 import {
-  runValidationCommand,
-  sourceFingerprint,
   evidenceSummary,
-  readSourceSnapshot,
   snapshotFingerprint,
-} from './validation.js';
+} from '../shared/validation-policy.js';
+import type { EngineEffects } from './ports/execution.js';
 import type { ValidationEvidence, ValidationSignals } from '../shared/types.js';
-import { prepareGitWorkspace, previewRunGit } from './git-workspaces.js';
 import { uncertainAssessmentToken } from '../shared/review-assessment.js';
 import { EXECUTION_POLICY } from './execution-policy.js';
 import { reworkTarget } from '../shared/rework.js';
 import { randomUUID, createHash } from 'node:crypto';
-import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
   AgentEvent,
@@ -44,11 +37,9 @@ import type {
   RunEvent,
   StepRun,
 } from '../shared/types.js';
-import type { Store } from './store.js';
-import { prepareWorkspace, prepareWorkspaceFrom } from './workspaces.js';
-import { Projects } from './projects.js';
+import type { WorkflowRunRepository } from './ports/repository.js';
 import { isPlanningStep } from '../shared/planning.js';
-import { askSchema } from './ask-tool.js';
+import { askSchema } from '../shared/ask-schema.js';
 import {
   checkConversation,
   initializeConversation,
@@ -120,10 +111,10 @@ export class Engine {
   private shuttingDown = false;
 
   constructor(
-    private readonly store: Store,
+    private readonly store: WorkflowRunRepository,
     private readonly config: AppConfig,
     private readonly execute: ExecuteAgent,
-    private readonly projects = new Projects(store, config),
+    private readonly effects: EngineEffects,
     private readonly assessReview?: (
       runId: string,
       stepId: string,
@@ -155,7 +146,7 @@ export class Engine {
       throw new Error('Workflow not found');
     }
     const now = new Date().toISOString();
-    const projectLocation = await this.projects.forRun(input.project);
+    const projectLocation = await this.effects.projects.forRun(input.project);
     if (
       input.expectedWorkspaceMode &&
       input.expectedWorkspaceMode !==
@@ -234,7 +225,7 @@ export class Engine {
           : 'Approve the plan to authorize up to two repairs and the selected delivery policy.',
         decisions: [],
       };
-    this.projects.assertNoConflict(run);
+    this.effects.projects.assertNoConflict(run);
     this.persist(run);
     this.emitEvent(run.id, null, 'status', 'Run queued.');
     this.schedule();
@@ -251,7 +242,7 @@ export class Engine {
     if (initial.currentStep === initial.steps.length - 1) {
       await this.assertValidationCurrent(id);
       const preview = initial.git
-        ? await previewRunGit(initial, this.config)
+        ? await this.effects.previewRunGit(initial, this.config)
         : undefined;
       const latest = this.requireRun(id);
       if (JSON.stringify(latest) !== revision)
@@ -596,7 +587,7 @@ export class Engine {
         'Wait for the agent to finish before sending another message.',
       );
     }
-    this.projects.assertNoConflict(run);
+    this.effects.projects.assertNoConflict(run);
     const stepIndex = run.steps.indexOf(step);
     if (step.definition.council)
       return this.challengeCouncil(id, stepId, content, messageId);
@@ -669,7 +660,7 @@ export class Engine {
 
   async secondOpinion(id: string, question: string): Promise<Run> {
     const run = this.requireRun(id);
-    this.projects.assertNoConflict(run);
+    this.effects.projects.assertNoConflict(run);
     const step = run.steps.at(run.currentStep);
     const evidence = step?.council;
     const member = step?.definition.council?.secondOpinion;
@@ -696,7 +687,9 @@ export class Engine {
         'Recover the original review before requesting another opinion.',
       );
     const revision = JSON.stringify(run);
-    if ((await sourceFingerprint(run.workspace)) !== evidence.source)
+    if (
+      (await this.effects.sourceFingerprint(run.workspace)) !== evidence.source
+    )
       throw Error('Review source is stale. Repeat validation and review.');
     if (JSON.stringify(this.requireRun(id)) !== revision)
       throw Error(
@@ -791,14 +784,14 @@ export class Engine {
 
   retry(id: string): Run {
     const run = this.requireRun(id);
-    this.projects.assertNoConflict(run);
+    this.effects.projects.assertNoConflict(run);
     if (run.status !== 'failed' && run.status !== 'interrupted') {
       throw new Error(`Cannot retry run in status "${run.status}"`);
     }
     if (run.workspace.length === 0) {
       const runDirectory = join(this.config.workspaceRoot, 'runs', run.id);
       if (
-        existsSync(runDirectory) &&
+        this.effects.workspaceExists(runDirectory) &&
         !(run.projectLocation?.workspaceMode === 'worktree' && run.git)
       ) {
         throw new Error(
@@ -1162,8 +1155,8 @@ export class Engine {
     this.emitEvent(runId, null, 'status', 'Run started.');
     try {
       if (initial.projectLocation?.workspaceMode === 'direct') {
-        this.projects.assertNoConflict(initial);
-        await this.projects.directFolder(initial);
+        this.effects.projects.assertNoConflict(initial);
+        await this.effects.projects.directFolder(initial);
       }
       const workspace =
         initial.workspace.length > 0
@@ -1178,7 +1171,7 @@ export class Engine {
         prepared.steps.some((s) => s.definition.council) &&
         prepared.steps.every((s) => s.attempt === 0)
       ) {
-        const files = await readSourceSnapshot(workspace);
+        const files = await this.effects.readSourceSnapshot(workspace);
         const latest = this.requireRun(runId);
         if (aborted(signal) || latest.status !== 'running') return;
         latest.sourceBaseline = {
@@ -1215,9 +1208,11 @@ export class Engine {
     let workspace: string;
     try {
       if (initial.projectLocation) {
-        const source = await this.projects.resolve(initial.projectLocation);
+        const source = await this.effects.projects.resolve(
+          initial.projectLocation,
+        );
         if (initial.projectLocation.workspaceMode === 'worktree') {
-          const prepared = await prepareGitWorkspace(
+          const prepared = await this.effects.prepareGitWorkspace(
             this.config,
             source,
             initial,
@@ -1235,13 +1230,13 @@ export class Engine {
           workspace =
             initial.projectLocation.workspaceMode === 'direct'
               ? source
-              : await prepareWorkspaceFrom(
+              : await this.effects.prepareWorkspaceFrom(
                   this.config.workspaceRoot,
                   source,
                   initial.id,
                 );
       } else
-        workspace = await prepareWorkspace(
+        workspace = await this.effects.prepareWorkspace(
           this.config.workspaceRoot,
           initial.project,
           initial.id,
@@ -1301,7 +1296,10 @@ export class Engine {
         !step.definition.validation &&
         !step.definition.council
       ) {
-        const packet = await writeEvidencePacket(run, this.config.dataDir);
+        const packet = await this.effects.writeEvidencePacket(
+          run,
+          this.config.dataDir,
+        );
         prompt += `
 
 # Recorded validation evidence
@@ -1537,7 +1535,7 @@ Read the complete recorded process evidence at ${JSON.stringify(packet.path)} (S
       run.currentStep >= run.steps.length - 1 &&
       final.council?.status !== 'running'
     )
-      await assertCouncilCurrent(run, final);
+      await this.effects.assertCouncilCurrent(run, final);
     const validation = run.steps.filter((s) => s.definition.validation);
     if (!validation.length) return;
     for (const step of validation) {
@@ -1553,7 +1551,9 @@ Read the complete recorded process evidence at ${JSON.stringify(packet.path)} (S
         throw Error(
           'Recorded validation is missing, failed, or changed source files.',
         );
-      if ((await sourceFingerprint(run.workspace)) !== evidence.after)
+      if (
+        (await this.effects.sourceFingerprint(run.workspace)) !== evidence.after
+      )
         throw Error('Source changed since recorded validation.');
     }
   }
@@ -1563,7 +1563,7 @@ Read the complete recorded process evidence at ${JSON.stringify(packet.path)} (S
     step: StepRun,
     signal: AbortSignal,
   ): Promise<AgentResult> {
-    const evidence = await runCouncil(
+    const evidence = await this.effects.runCouncil(
       run,
       step,
       this.config,
@@ -1642,7 +1642,7 @@ Read the complete recorded process evidence at ${JSON.stringify(packet.path)} (S
         costUsd: null,
       };
     }
-    evidence.before = await sourceFingerprint(workspace);
+    evidence.before = await this.effects.sourceFingerprint(workspace);
     save();
     const validation = step.definition.validation;
     if (!validation)
@@ -1650,12 +1650,17 @@ Read the complete recorded process evidence at ${JSON.stringify(packet.path)} (S
     for (const command of validation.commands) {
       if (signal.aborted) break;
       const index = evidence.commands.length;
-      await runValidationCommand(command, workspace, signal, (result) => {
-        evidence.commands[index] = result;
-        save();
-      });
+      await this.effects.runValidationCommand(
+        command,
+        workspace,
+        signal,
+        (result) => {
+          evidence.commands[index] = result;
+          save();
+        },
+      );
     }
-    evidence.after = await sourceFingerprint(workspace);
+    evidence.after = await this.effects.sourceFingerprint(workspace);
     evidence.status =
       !signal.aborted &&
       evidence.commands.length === validation.commands.length &&

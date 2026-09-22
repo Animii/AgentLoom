@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Store } from '../src/server/store.js';
-import { Engine } from '../src/server/engine.js';
+import { createRuntimeEngine } from '../src/server/engine-runtime.js';
+import type { Engine } from '../src/server/engine.js';
 import type {
   AppConfig,
   ExecuteAgent,
@@ -42,7 +43,7 @@ async function fixture(execute: ExecuteAgent) {
     maxOutputBytes: 100000,
   };
   const store = new Store(config.dataDir);
-  const engine = new Engine(store, config, execute);
+  const engine = createRuntimeEngine(store, config, execute);
   const workflow = (steps: StepDefinition[]) => {
     const w: Workflow = {
       id: 'test',
@@ -273,7 +274,7 @@ void test(
       const prior = interrupted.steps[0];
       assert.match(prior.output, /Partial implementation/);
       assert.equal(prior.costUsd, null);
-      restarted = new Engine(
+      restarted = createRuntimeEngine(
         f.store,
         f.config,
         async (s, p, workspace, signal, event) => {
@@ -380,7 +381,7 @@ void test('running records recover as interrupted; waiting approvals survive res
     interrupted.status = 'running';
     interrupted.steps[0].status = 'running';
     f.store.saveRun(interrupted);
-    const restarted = new Engine(f.store, f.config, success);
+    const restarted = createRuntimeEngine(f.store, f.config, success);
     assert.equal(f.store.getRun(r.id)?.status, 'waiting_approval');
     assert.equal(f.store.getRun('interrupted-run')?.status, 'interrupted');
     await restarted.shutdown();
@@ -520,7 +521,7 @@ void test('planning history survives reopening storage and provider failure retr
     await f.engine.shutdown();
     f.store.close();
     reopened = new Store(f.config.dataDir);
-    restarted = new Engine(reopened, f.config, execute);
+    restarted = createRuntimeEngine(reopened, f.config, execute);
     assert.equal(reopened.getRun(run.id)?.status, 'waiting_input');
     assert.equal(reopened.getRun(run.id)?.steps[0].conversation?.length, 2);
     restarted.chat(run.id, 'plan', 'Developers', 'answer');
@@ -702,7 +703,7 @@ void test('question cards survive a provider failure and restart before final ou
     ask.status = 'running';
     ask.steps[0].status = 'running';
     f.store.saveRun(ask);
-    const restarted = new Engine(f.store, f.config, success);
+    const restarted = createRuntimeEngine(f.store, f.config, success);
     assert.equal(f.store.getRun(r.id)?.status, 'waiting_input');
     assert.ok(f.store.getRun(r.id)?.steps[0].pendingAskId);
     await restarted.shutdown();

@@ -1,22 +1,17 @@
+import { createBrowserTestApp as createApp } from '../helpers/app-fixture.js';
 import { test, expect } from '@playwright/test';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 import assert from 'node:assert/strict';
-type AppModule = typeof import('../../src/server/app.js');
-
-async function importDist<T>(relativePath: string): Promise<T> {
-  return (await import(pathToFileURL(path.resolve(relativePath)).href)) as T;
-}
 
 test('real crate UI: conversation, triage, repair, approval and URL restoration', async ({
   page,
 }) => {
   const root = await mkdtemp(path.join(tmpdir(), 'loom-crate-ui-'));
   await mkdir(path.join(root, 'work/projects/welcome'), { recursive: true });
-  const { createApp } = await importDist<AppModule>('dist/server/app.js');
+
   const app = await createApp(
     {
       dataDir: path.join(root, 'data'),
@@ -142,7 +137,7 @@ test('crate creation selects the split-capable workflow and child navigation sur
 }) => {
   const root = await mkdtemp(path.join(tmpdir(), 'loom-split-ui-'));
   await mkdir(path.join(root, 'work/projects/welcome'), { recursive: true });
-  const { createApp } = await importDist<AppModule>('dist/server/app.js');
+
   const app = await createApp({
     dataDir: path.join(root, 'data'),
     workspaceRoot: path.join(root, 'work'),

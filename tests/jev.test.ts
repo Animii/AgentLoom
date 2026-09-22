@@ -10,7 +10,7 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import { createApp } from '../src/server/app.js';
+import { createTestApp as createApp } from './helpers/app-fixture.js';
 import type { AppConfig } from '../src/shared/types.js';
 
 void test('Jev encrypted credentials, typed API calls and sanitized failures', async (t) => {

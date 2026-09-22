@@ -1,14 +1,8 @@
+import { createBrowserTestApp as createApp } from '../helpers/app-fixture.js';
 import { test, expect } from '@playwright/test';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-
-type AppModule = typeof import('../../src/server/app.js');
-
-async function importDist<T>(relativePath: string): Promise<T> {
-  return (await import(pathToFileURL(path.resolve(relativePath)).href)) as T;
-}
 
 test('Projects connects a real folder and manages its mode, name, archive and history', async ({
   page,
@@ -17,7 +11,7 @@ test('Projects connects a real folder and manages its mode, name, archive and hi
   const host = path.join(root, 'host');
   await mkdir(path.join(host, 'Game'), { recursive: true });
   await writeFile(path.join(host, 'Game/README.md'), 'Original game');
-  const { createApp } = await importDist<AppModule>('dist/server/app.js');
+
   const app = await createApp({
     dataDir: path.join(root, 'data'),
     workspaceRoot: path.join(root, 'work'),

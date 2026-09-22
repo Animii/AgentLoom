@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppConfig, ManagedProject, Run } from '../shared/types.js';
-import type { Store } from './store.js';
+import type { ProjectRepository, RunRepository } from './ports/repository.js';
 import { listProjects } from './workspaces.js';
 
 const liveStatuses = new Set([
@@ -33,7 +33,7 @@ const overlaps = (a: string, b: string) =>
 
 export class Projects {
   constructor(
-    private store: Store,
+    private store: ProjectRepository & RunRepository,
     private config: AppConfig,
   ) {}
 
