@@ -1,5 +1,17 @@
-import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  createCipheriv,
+  createDecipheriv,
+  randomBytes,
+  randomUUID,
+} from 'node:crypto';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
@@ -16,12 +28,22 @@ const FILE_MODE = 0o600;
 const MAX_API_KEY_LENGTH = 4096;
 const QUESTION_ID_PATTERN = /^[a-zA-Z0-9_-]{1,80}$/;
 const MODEL_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
-const WHITESPACE_OR_CONTROL = /[\s\u0000-\u001f\u007f]/;
+
+function hasWhitespaceOrControl(value: string): boolean {
+  if (/\s/.test(value)) return true;
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint !== undefined && (codePoint < 0x20 || codePoint === 0x7f))
+      return true;
+  }
+  return false;
+}
 
 const ERROR_INVALID_KEY = 'Invalid API key';
 const ERROR_INVALID_REQUEST = 'Invalid Jev request';
 const ERROR_INVALID_RESPONSE = 'Jev returned an invalid response.';
-const ERROR_KEY_REJECTED = 'Jev rejected the API key. Check your TypeSafe credentials.';
+const ERROR_KEY_REJECTED =
+  'Jev rejected the API key. Check your TypeSafe credentials.';
 const ERROR_RATE_LIMIT = 'Jev rate limit reached. Try again later.';
 const ERROR_UPSTREAM = 'Jev request failed';
 const ERROR_TIMEOUT = 'Jev request timed out';
@@ -30,25 +52,41 @@ const ERROR_SERVER = 'Internal server error';
 
 const TEST_STATE = 'AgentLoom connection test.';
 const TEST_QUESTIONS = {
-  connection: { type: 'noul' as const, instructions: 'Does the state mention AgentLoom?' },
+  connection: {
+    type: 'noul' as const,
+    instructions: 'Does the state mention AgentLoom?',
+  },
 };
 
 const trimmedString = z.string().transform((value) => value.trim());
 
 const nonBlankString = (max: number) =>
-  trimmedString.pipe(z.string().min(1).max(max, `must be at most ${max} characters`));
+  trimmedString.pipe(
+    z
+      .string()
+      .min(1)
+      .max(max, `must be at most ${String(max)} characters`),
+  );
 
 const apiKeyBodySchema = z.strictObject({
   apiKey: trimmedString.pipe(
     z
       .string()
       .min(1, 'must not be empty')
-      .max(MAX_API_KEY_LENGTH, `must be at most ${MAX_API_KEY_LENGTH} characters`)
-      .refine((value) => !WHITESPACE_OR_CONTROL.test(value), 'must not contain whitespace or control characters'),
+      .max(
+        MAX_API_KEY_LENGTH,
+        `must be at most ${String(MAX_API_KEY_LENGTH)} characters`,
+      )
+      .refine(
+        (value) => !hasWhitespaceOrControl(value),
+        'must not contain whitespace or control characters',
+      ),
   ),
 });
 
-const questionIdSchema = z.string().regex(QUESTION_ID_PATTERN, 'must match /^[a-zA-Z0-9_-]{1,80}$/');
+const questionIdSchema = z
+  .string()
+  .regex(QUESTION_ID_PATTERN, 'must match /^[a-zA-Z0-9_-]{1,80}$/');
 
 const criterionKeySchema = z
   .string()
@@ -66,15 +104,22 @@ const choiceQuestionSchema = z.strictObject({
   instructions: nonBlankString(4000),
   criteria: z
     .record(criterionKeySchema, nonBlankString(1000))
-    .refine((value) => Object.keys(value).length >= 2 && Object.keys(value).length <= 255, {
-      message: 'must have between 2 and 255 criteria',
-    }),
+    .refine(
+      (value) =>
+        Object.keys(value).length >= 2 && Object.keys(value).length <= 255,
+      {
+        message: 'must have between 2 and 255 criteria',
+      },
+    ),
 });
 
 const scoreQuestionSchema = z.strictObject({
   type: z.literal('score'),
   instructions: nonBlankString(4000),
-  criteria: z.array(nonBlankString(1000)).min(2, 'must have at least 2 criteria').max(10, 'must have at most 10 criteria'),
+  criteria: z
+    .array(nonBlankString(1000))
+    .min(2, 'must have at least 2 criteria')
+    .max(10, 'must have at most 10 criteria'),
 });
 
 const questionSchema = z.discriminatedUnion('type', [
@@ -85,17 +130,30 @@ const questionSchema = z.discriminatedUnion('type', [
 
 const evaluateBodySchema = z.strictObject({
   state: trimmedString.pipe(
-    z.string().min(1, 'must not be empty').max(30000, 'must be at most 30000 characters'),
+    z
+      .string()
+      .min(1, 'must not be empty')
+      .max(30000, 'must be at most 30000 characters'),
   ),
   model: trimmedString
-    .pipe(z.string().max(120, 'must be at most 120 characters').regex(MODEL_PATTERN, 'has an invalid format'))
+    .pipe(
+      z
+        .string()
+        .max(120, 'must be at most 120 characters')
+        .regex(MODEL_PATTERN, 'has an invalid format'),
+    )
     .default(DEFAULT_MODEL),
-  questions: z.record(questionIdSchema, questionSchema).superRefine((value, ctx) => {
-    const count = Object.keys(value).length;
-    if (count < 1 || count > 16) {
-      ctx.addIssue({ code: 'custom', message: 'must have between 1 and 16 questions' });
-    }
-  }),
+  questions: z
+    .record(questionIdSchema, questionSchema)
+    .superRefine((value, ctx) => {
+      const count = Object.keys(value).length;
+      if (count < 1 || count > 16) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'must have between 1 and 16 questions',
+        });
+      }
+    }),
 });
 
 const testBodySchema = z.strictObject({});
@@ -126,7 +184,10 @@ type ProjectedAnswer =
 interface JevSuccess {
   readonly model: string;
   readonly answers: Record<string, ProjectedAnswer>;
-  readonly usage?: { readonly input_tokens: number; readonly output_tokens: number };
+  readonly usage?: {
+    readonly input_tokens: number;
+    readonly output_tokens: number;
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -134,10 +195,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isUnitNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    value <= 1
+  );
 }
 
-function projectProbabilities(value: unknown, keys: readonly string[]): Record<string, number> | null {
+function projectProbabilities(
+  value: unknown,
+  keys: readonly string[],
+): Record<string, number> | null {
   if (!isRecord(value) || Object.keys(value).length !== keys.length) {
     return null;
   }
@@ -152,7 +221,10 @@ function projectProbabilities(value: unknown, keys: readonly string[]): Record<s
   return projected;
 }
 
-function projectAnswer(raw: unknown, expected: ExpectedQuestion): ProjectedAnswer | null {
+function projectAnswer(
+  raw: unknown,
+  expected: ExpectedQuestion,
+): ProjectedAnswer | null {
   if (!isRecord(raw) || raw.type !== expected.type) {
     return null;
   }
@@ -163,20 +235,36 @@ function projectAnswer(raw: unknown, expected: ExpectedQuestion): ProjectedAnswe
     return { type: 'noul', noul: raw.noul };
   }
   if (expected.type === 'choice') {
-    if (typeof raw.choice !== 'string' || !expected.criteria.includes(raw.choice)) {
+    if (
+      typeof raw.choice !== 'string' ||
+      !expected.criteria.includes(raw.choice)
+    ) {
       return null;
     }
     if (!isUnitNumber(raw.confidence)) {
       return null;
     }
-    const probabilities = projectProbabilities(raw.probabilities, expected.criteria);
+    const probabilities = projectProbabilities(
+      raw.probabilities,
+      expected.criteria,
+    );
     if (probabilities === null) {
       return null;
     }
-    return { type: 'choice', choice: raw.choice, confidence: raw.confidence, probabilities };
+    return {
+      type: 'choice',
+      choice: raw.choice,
+      confidence: raw.confidence,
+      probabilities,
+    };
   }
   const maximumScore = expected.criteria.length - 1;
-  if (typeof raw.score !== 'number' || !Number.isFinite(raw.score) || raw.score < 0 || raw.score > maximumScore) {
+  if (
+    typeof raw.score !== 'number' ||
+    !Number.isFinite(raw.score) ||
+    raw.score < 0 ||
+    raw.score > maximumScore
+  ) {
     return null;
   }
   if (!isUnitNumber(raw.confidence)) {
@@ -189,7 +277,12 @@ function projectAnswer(raw: unknown, expected: ExpectedQuestion): ProjectedAnswe
   if (probabilities === null) {
     return null;
   }
-  const answer = { type: 'score' as const, score: raw.score, confidence: raw.confidence, probabilities };
+  const answer = {
+    type: 'score' as const,
+    score: raw.score,
+    confidence: raw.confidence,
+    probabilities,
+  };
   if (!('legend' in raw)) {
     return answer;
   }
@@ -216,10 +309,18 @@ function projectUsage(value: unknown): JevSuccess['usage'] {
   }
   const inputTokens = value.input_tokens;
   const outputTokens = value.output_tokens;
-  if (typeof inputTokens !== 'number' || !Number.isInteger(inputTokens) || inputTokens < 0) {
+  if (
+    typeof inputTokens !== 'number' ||
+    !Number.isInteger(inputTokens) ||
+    inputTokens < 0
+  ) {
     return undefined;
   }
-  if (typeof outputTokens !== 'number' || !Number.isInteger(outputTokens) || outputTokens < 0) {
+  if (
+    typeof outputTokens !== 'number' ||
+    !Number.isInteger(outputTokens) ||
+    outputTokens < 0
+  ) {
     return undefined;
   }
   return { input_tokens: inputTokens, output_tokens: outputTokens };
@@ -234,10 +335,18 @@ function projectResponse(
     return null;
   }
   const model = raw.model;
-  if (typeof model !== 'string' || model.length === 0 || model.length > 120 || model.includes(apiKey)) {
+  if (
+    typeof model !== 'string' ||
+    model.length === 0 ||
+    model.length > 120 ||
+    model.includes(apiKey)
+  ) {
     return null;
   }
-  if (!isRecord(raw.answers) || Object.keys(raw.answers).length !== expected.size) {
+  if (
+    !isRecord(raw.answers) ||
+    Object.keys(raw.answers).length !== expected.size
+  ) {
     return null;
   }
   const answers: Record<string, ProjectedAnswer> = {};
@@ -255,11 +364,16 @@ function projectResponse(
   return usage === undefined ? { model, answers } : { model, answers, usage };
 }
 
-function expectedQuestions(questions: Record<string, Question>): Map<string, ExpectedQuestion> {
+function expectedQuestions(
+  questions: Record<string, Question>,
+): Map<string, ExpectedQuestion> {
   const expected = new Map<string, ExpectedQuestion>();
   for (const [id, question] of Object.entries(questions)) {
     if (question.type === 'choice') {
-      expected.set(id, { type: 'choice', criteria: Object.keys(question.criteria) });
+      expected.set(id, {
+        type: 'choice',
+        criteria: Object.keys(question.criteria),
+      });
     } else if (question.type === 'score') {
       expected.set(id, { type: 'score', criteria: [...question.criteria] });
     } else {
@@ -289,7 +403,10 @@ function readMasterKey(paths: StoragePaths): Buffer {
   if (!existsSync(paths.masterPath)) {
     const generated = randomBytes(MASTER_KEY_BYTES);
     try {
-      writeFileSync(paths.masterPath, generated, { flag: 'wx', mode: FILE_MODE });
+      writeFileSync(paths.masterPath, generated, {
+        flag: 'wx',
+        mode: FILE_MODE,
+      });
       return generated;
     } catch {
       const existing = readFileSync(paths.masterPath);
@@ -329,7 +446,11 @@ function decryptApiKey(payload: string, masterKey: Buffer): string {
   ) {
     throw new Error('Invalid credentials file');
   }
-  const decipher = createDecipheriv('aes-256-gcm', masterKey, Buffer.from(parsed.iv, 'base64'));
+  const decipher = createDecipheriv(
+    'aes-256-gcm',
+    masterKey,
+    Buffer.from(parsed.iv, 'base64'),
+  );
   decipher.setAuthTag(Buffer.from(parsed.tag, 'base64'));
   const plaintext = Buffer.concat([
     decipher.update(Buffer.from(parsed.data, 'base64')),
@@ -343,7 +464,7 @@ function isValidApiKey(value: string): boolean {
   return (
     trimmed.length >= 1 &&
     trimmed.length <= MAX_API_KEY_LENGTH &&
-    !WHITESPACE_OR_CONTROL.test(trimmed)
+    !hasWhitespaceOrControl(trimmed)
   );
 }
 
@@ -351,7 +472,10 @@ function loadSavedApiKey(paths: StoragePaths): string | null {
   if (!existsSync(paths.credentialsPath)) {
     return null;
   }
-  const apiKey = decryptApiKey(readFileSync(paths.credentialsPath, 'utf8'), readMasterKey(paths));
+  const apiKey = decryptApiKey(
+    readFileSync(paths.credentialsPath, 'utf8'),
+    readMasterKey(paths),
+  );
   if (!isValidApiKey(apiKey)) {
     throw new Error('Invalid credentials file');
   }
@@ -362,7 +486,10 @@ function saveApiKey(paths: StoragePaths, apiKey: string): void {
   const masterKey = readMasterKey(paths);
   const tmpPath = join(paths.secretsDir, `.jev-${randomUUID()}.tmp`);
   try {
-    writeFileSync(tmpPath, encryptApiKey(apiKey, masterKey), { flag: 'wx', mode: FILE_MODE });
+    writeFileSync(tmpPath, encryptApiKey(apiKey, masterKey), {
+      flag: 'wx',
+      mode: FILE_MODE,
+    });
     renameSync(tmpPath, paths.credentialsPath);
   } catch (error) {
     try {
@@ -425,9 +552,6 @@ async function readBodyWithCap(response: Response): Promise<string> {
     if (done) {
       break;
     }
-    if (value === undefined) {
-      continue;
-    }
     size += value.byteLength;
     if (size > MAX_RESPONSE_BYTES) {
       await reader.cancel().catch(() => undefined);
@@ -435,7 +559,9 @@ async function readBodyWithCap(response: Response): Promise<string> {
     }
     chunks.push(value);
   }
-  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8');
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString(
+    'utf8',
+  );
 }
 
 async function discardBody(response: Response): Promise<void> {
@@ -447,15 +573,25 @@ async function discardBody(response: Response): Promise<void> {
 }
 
 function isTimeoutError(error: unknown): boolean {
-  return isRecord(error) && (error.name === 'TimeoutError' || error.name === 'AbortError');
+  return (
+    isRecord(error) &&
+    (error.name === 'TimeoutError' || error.name === 'AbortError')
+  );
 }
 
-async function callJev(fetchImpl: typeof fetch, apiKey: string, payload: UpstreamPayload): Promise<UpstreamOutcome> {
+async function callJev(
+  fetchImpl: typeof fetch,
+  apiKey: string,
+  payload: UpstreamPayload,
+): Promise<UpstreamOutcome> {
   let response: Response;
   try {
     response = await fetchImpl(UPSTREAM_URL, {
       method: 'POST',
-      headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        'content-type': 'application/json',
+      },
       body: JSON.stringify(payload),
       redirect: 'error',
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
@@ -493,11 +629,19 @@ async function callJev(fetchImpl: typeof fetch, apiKey: string, payload: Upstrea
   return { ok: true, value };
 }
 
-export function registerJev(app: FastifyInstance, config: AppConfig, fetchImpl: typeof fetch = fetch): (input: unknown) => Promise<JevSuccess> {
+export function registerJev(
+  app: FastifyInstance,
+  config: AppConfig,
+  fetchImpl: typeof fetch = fetch,
+): (input: unknown) => Promise<JevSuccess> {
   const storage = storagePaths(config);
   let activeRequests = 0;
 
-  const fail = (reply: FastifyReply, statusCode: number, message: string): FastifyReply => {
+  const fail = (
+    reply: FastifyReply,
+    statusCode: number,
+    message: string,
+  ): FastifyReply => {
     reply.header('cache-control', 'no-store');
     return reply.code(statusCode).send({ error: message });
   };
@@ -506,7 +650,10 @@ export function registerJev(app: FastifyInstance, config: AppConfig, fetchImpl: 
     reply.header('cache-control', 'no-store');
     try {
       const credential = resolveCredential(storage);
-      return { configured: credential.apiKey !== null, source: credential.source };
+      return {
+        configured: credential.apiKey !== null,
+        source: credential.source,
+      };
     } catch {
       return fail(reply, 500, ERROR_SERVER);
     }
@@ -521,7 +668,10 @@ export function registerJev(app: FastifyInstance, config: AppConfig, fetchImpl: 
     try {
       saveApiKey(storage, parsed.data.apiKey);
       const credential = resolveCredential(storage);
-      return { configured: credential.apiKey !== null, source: credential.source };
+      return {
+        configured: credential.apiKey !== null,
+        source: credential.source,
+      };
     } catch {
       return fail(reply, 500, ERROR_SERVER);
     }
@@ -532,7 +682,10 @@ export function registerJev(app: FastifyInstance, config: AppConfig, fetchImpl: 
     try {
       deleteSavedApiKey(storage);
       const credential = resolveCredential(storage);
-      return { configured: credential.apiKey !== null, source: credential.source };
+      return {
+        configured: credential.apiKey !== null,
+        source: credential.source,
+      };
     } catch {
       return fail(reply, 500, ERROR_SERVER);
     }
@@ -540,7 +693,9 @@ export function registerJev(app: FastifyInstance, config: AppConfig, fetchImpl: 
 
   app.post('/api/jev/test', async (request, reply) => {
     reply.header('cache-control', 'no-store');
-    const parsed = testBodySchema.safeParse(request.body === undefined ? {} : request.body);
+    const parsed = testBodySchema.safeParse(
+      request.body === undefined ? {} : request.body,
+    );
     if (!parsed.success) {
       return fail(reply, 400, ERROR_INVALID_REQUEST);
     }
@@ -558,18 +713,28 @@ export function registerJev(app: FastifyInstance, config: AppConfig, fetchImpl: 
     }
     activeRequests += 1;
     try {
-      const expected = new Map<string, ExpectedQuestion>([['connection', { type: 'noul', criteria: [] }]]);
+      const expected = new Map<string, ExpectedQuestion>([
+        ['connection', { type: 'noul', criteria: [] }],
+      ]);
       const outcome = await callJev(fetchImpl, credential.apiKey, {
         state: TEST_STATE,
         model: DEFAULT_MODEL,
         questions: TEST_QUESTIONS,
       });
       if (!outcome.ok) {
-        return fail(reply, outcome.statusCode ?? 502, outcome.message ?? ERROR_UPSTREAM);
+        return await fail(
+          reply,
+          outcome.statusCode ?? 502,
+          outcome.message ?? ERROR_UPSTREAM,
+        );
       }
-      const projected = projectResponse(outcome.value, expected, credential.apiKey);
+      const projected = projectResponse(
+        outcome.value,
+        expected,
+        credential.apiKey,
+      );
       if (projected === null) {
-        return fail(reply, 502, ERROR_INVALID_RESPONSE);
+        return await fail(reply, 502, ERROR_INVALID_RESPONSE);
       }
       return { ok: true, model: projected.model };
     } finally {
@@ -604,11 +769,19 @@ export function registerJev(app: FastifyInstance, config: AppConfig, fetchImpl: 
         questions: parsed.data.questions,
       });
       if (!outcome.ok) {
-        return fail(reply, outcome.statusCode ?? 502, outcome.message ?? ERROR_UPSTREAM);
+        return await fail(
+          reply,
+          outcome.statusCode ?? 502,
+          outcome.message ?? ERROR_UPSTREAM,
+        );
       }
-      const projected = projectResponse(outcome.value, expected, credential.apiKey);
+      const projected = projectResponse(
+        outcome.value,
+        expected,
+        credential.apiKey,
+      );
       if (projected === null) {
-        return fail(reply, 502, ERROR_INVALID_RESPONSE);
+        return await fail(reply, 502, ERROR_INVALID_RESPONSE);
       }
       return projected;
     } finally {
@@ -619,17 +792,27 @@ export function registerJev(app: FastifyInstance, config: AppConfig, fetchImpl: 
     const parsed = evaluateBodySchema.safeParse(input);
     if (!parsed.success) throw new Error(ERROR_INVALID_REQUEST);
     let credential: Credential;
-    try { credential = resolveCredential(storage); } catch { throw new Error(ERROR_SERVER); }
+    try {
+      credential = resolveCredential(storage);
+    } catch {
+      throw new Error(ERROR_SERVER);
+    }
     if (!credential.apiKey) throw new Error(ERROR_MISSING_KEY);
-    if (activeRequests >= MAX_CONCURRENT_REQUESTS) throw new Error(ERROR_RATE_LIMIT);
+    if (activeRequests >= MAX_CONCURRENT_REQUESTS)
+      throw new Error(ERROR_RATE_LIMIT);
     activeRequests++;
     try {
       const outcome = await callJev(fetchImpl, credential.apiKey, parsed.data);
       if (!outcome.ok) throw new Error(outcome.message ?? ERROR_UPSTREAM);
-      const projected = projectResponse(outcome.value, expectedQuestions(parsed.data.questions), credential.apiKey);
+      const projected = projectResponse(
+        outcome.value,
+        expectedQuestions(parsed.data.questions),
+        credential.apiKey,
+      );
       if (!projected) throw new Error(ERROR_INVALID_RESPONSE);
       return projected;
-    } finally { activeRequests--; }
+    } finally {
+      activeRequests--;
+    }
   };
-
 }

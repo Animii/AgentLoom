@@ -1,4 +1,11 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type SyntheticEvent } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type SubmitEvent,
+  type SyntheticEvent,
+} from 'react';
 import type { ProjectInfo, Run, Workflow } from '../shared/types.js';
 import ProjectImport from './ProjectImport';
 import { supportsEscalation } from '../shared/automation';
@@ -52,10 +59,15 @@ export default function NewRunDialog({
   const [project, setProject] = useState('');
   const [workflowSelection, setWorkflowSelection] = useState('');
   const [mode, setMode] = useState<RunMode>('live');
-  const [delivery,setDelivery]=useState('manual');
-  const [rescue,setRescue]=useState(true);
-  const selectedWorkflow=workflows.find(w=>w.id===workflowSelection);
-  const automationEligible=mode==='live' && projects.find(p=>p.id===project)?.workspaceMode==='worktree' && !!selectedWorkflow?.steps[0]?.planning && !!selectedWorkflow.steps.at(-1)?.council && !selectedWorkflow.steps.slice(1,-1).some(s=>s.approval);
+  const [delivery, setDelivery] = useState('manual');
+  const [rescue, setRescue] = useState(true);
+  const selectedWorkflow = workflows.find((w) => w.id === workflowSelection);
+  const automationEligible =
+    mode === 'live' &&
+    projects.find((p) => p.id === project)?.workspaceMode === 'worktree' &&
+    !!selectedWorkflow?.steps[0]?.planning &&
+    !!selectedWorkflow.steps.at(-1)?.council &&
+    !selectedWorkflow.steps.slice(1, -1).some((s) => s.approval);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addingProject, setAddingProject] = useState(false);
@@ -75,27 +87,47 @@ export default function NewRunDialog({
   useEffect(() => {
     if (open && !wasOpenRef.current) {
       setTitle(initialDemo ? 'Explore an approval workflow' : '');
-      setTask(initialDemo ? 'Propose a small text utility and explain each handoff.' : '');
+      setTask(
+        initialDemo
+          ? 'Propose a small text utility and explain each handoff.'
+          : '',
+      );
       setMode(initialDemo ? 'demo' : 'live');
       setDelivery(initialDemo ? 'manual' : 'draft');
-      setProject(initialProject ?? projects[0]?.id ?? '');
-      setWorkflowSelection(workflows.find(w=>w.id===(crate?'crate-delivery':'single-review-delivery'))?.id ?? workflows[0]?.id ?? '');
+      setProject(initialProject ?? projects.at(0)?.id ?? '');
+      setWorkflowSelection(
+        workflows.find(
+          (w) => w.id === (crate ? 'crate-delivery' : 'single-review-delivery'),
+        )?.id ??
+          workflows.at(0)?.id ??
+          '',
+      );
       setSubmitting(false);
       setRescue(true);
       setError(null);
       setAddingProject(false);
     }
     wasOpenRef.current = open;
-  }, [open, initialDemo, initialProject, projects, workflows]);
+  }, [open, initialDemo, initialProject, projects, workflows, crate]);
 
-  useEffect(() => { if (open && !project && projects.length) setProject(initialProject ?? projects[0].id); }, [open, project, projects, initialProject]);
-  useEffect(() => { if (open && !workflowSelection && workflows.length) setWorkflowSelection(workflows.find(w=>w.id===(crate?'crate-delivery':'single-review-delivery'))?.id ?? workflows[0].id); }, [open, workflowSelection, workflows]);
+  useEffect(() => {
+    if (open && !project && projects.length)
+      setProject(initialProject ?? projects[0].id);
+  }, [open, project, projects, initialProject]);
+  useEffect(() => {
+    if (open && !workflowSelection && workflows.length)
+      setWorkflowSelection(
+        workflows.find(
+          (w) => w.id === (crate ? 'crate-delivery' : 'single-review-delivery'),
+        )?.id ?? workflows[0].id,
+      );
+  }, [open, workflowSelection, workflows, crate]);
 
   const canSubmit =
     !submitting &&
     title.trim() !== '' &&
     task.trim() !== '' &&
-    projects.some(item => item.id === project) &&
+    projects.some((item) => item.id === project) &&
     workflowSelection !== '' &&
     projects.length > 0 &&
     workflows.length > 0;
@@ -103,11 +135,16 @@ export default function NewRunDialog({
   function handleCancel(event: SyntheticEvent<HTMLDialogElement>): void {
     event.preventDefault();
     if (submitting || importBusy) return;
-    if (addingProject) { setAddingProject(false); return; }
+    if (addingProject) {
+      setAddingProject(false);
+      return;
+    }
     onClose();
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+  async function handleSubmit(
+    event: SubmitEvent<HTMLFormElement>,
+  ): Promise<void> {
     event.preventDefault();
     if (!canSubmit) return;
     setSubmitting(true);
@@ -117,21 +154,36 @@ export default function NewRunDialog({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...(crate ? {crate:true} : {}),
+          ...(crate ? { crate: true } : {}),
           title: title.trim(),
           task: task.trim(),
           project,
-          expectedWorkspaceMode: projects.find(item => item.id === project)?.workspaceMode ?? 'isolated',
+          expectedWorkspaceMode:
+            projects.find((item) => item.id === project)?.workspaceMode ??
+            'isolated',
           workflowId: workflowSelection,
           mode,
-          ...(automationEligible && delivery!=='manual'?{automation:{publication:delivery,...(rescue && selectedWorkflow && supportsEscalation(selectedWorkflow)?{escalation:'fable'}:{})}}:{}),
+          ...(automationEligible && delivery !== 'manual'
+            ? {
+                automation: {
+                  publication: delivery,
+                  ...(rescue && supportsEscalation(selectedWorkflow)
+                    ? { escalation: 'fable' }
+                    : {}),
+                },
+              }
+            : {}),
         }),
       });
       if (!response.ok) {
-        let message = `Unable to start run (HTTP ${response.status}).`;
+        let message = `Unable to start run (HTTP ${String(response.status)}).`;
         try {
           const body: unknown = await response.json();
-          if (isRecord(body) && typeof body.error === 'string' && body.error !== '') {
+          if (
+            isRecord(body) &&
+            typeof body.error === 'string' &&
+            body.error !== ''
+          ) {
             message = body.error;
           }
         } catch {
@@ -140,7 +192,8 @@ export default function NewRunDialog({
         throw new Error(message);
       }
       const payload: unknown = await response.json();
-      const candidate = isRecord(payload) && isRecord(payload.run) ? payload.run : payload;
+      const candidate =
+        isRecord(payload) && isRecord(payload.run) ? payload.run : payload;
       if (!isRecord(candidate) || typeof candidate.id !== 'string') {
         throw new Error('The server returned an unexpected response.');
       }
@@ -149,7 +202,9 @@ export default function NewRunDialog({
       onClose();
     } catch (caught: unknown) {
       setSubmitting(false);
-      setError(caught instanceof Error ? caught.message : 'Unable to start run.');
+      setError(
+        caught instanceof Error ? caught.message : 'Unable to start run.',
+      );
     }
   }
 
@@ -160,118 +215,236 @@ export default function NewRunDialog({
       aria-labelledby={dialogTitleId}
       onCancel={handleCancel}
     >
-      {addingProject ? <ProjectImport titleId={dialogTitleId} onBusy={setImportBusy} onCancel={() => setAddingProject(false)} onCreated={item => { onProjectCreated(item); setProject(item.id); setAddingProject(false); }} /> : <form className="new-run-form" onSubmit={handleSubmit}>
-        <h2 id={dialogTitleId} className="dialog-title">
-          {crate ? 'New crate' : 'New run'}
-        </h2>
+      {addingProject ? (
+        <ProjectImport
+          titleId={dialogTitleId}
+          onBusy={setImportBusy}
+          onCancel={() => {
+            setAddingProject(false);
+          }}
+          onCreated={(item) => {
+            onProjectCreated(item);
+            setProject(item.id);
+            setAddingProject(false);
+          }}
+        />
+      ) : (
+        <form
+          className="new-run-form"
+          onSubmit={(event) => {
+            void handleSubmit(event);
+          }}
+        >
+          <h2 id={dialogTitleId} className="dialog-title">
+            {crate ? 'New crate' : 'New run'}
+          </h2>
 
-        {error ? (
-          <div className="error-banner" role="alert">
-            {error}
+          {error ? (
+            <div className="error-banner" role="alert">
+              {error}
+            </div>
+          ) : null}
+
+          <div className="form-grid">
+            <div className="field">
+              <label htmlFor={titleId}>Task title</label>
+              <input
+                ref={titleInputRef}
+                id={titleId}
+                type="text"
+                value={title}
+                maxLength={120}
+                required
+                disabled={submitting}
+                onChange={(event) => {
+                  setTitle(event.target.value);
+                }}
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor={taskId}>Task brief</label>
+              <textarea
+                id={taskId}
+                value={task}
+                maxLength={30000}
+                required
+                rows={4}
+                disabled={submitting}
+                onChange={(event) => {
+                  setTask(event.target.value);
+                }}
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor={projectId}>Project</label>
+              <select
+                id={projectId}
+                value={project}
+                required
+                disabled={submitting || projects.length === 0}
+                onChange={(event) => {
+                  setProject(event.target.value);
+                }}
+              >
+                {projects.length === 0 ? (
+                  <option value="">No projects found</option>
+                ) : null}
+                {projects.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+              <p className="field-helper">
+                {projects.find((item) => item.id === project)?.workspaceMode ===
+                'worktree'
+                  ? 'Git worktree: a dedicated branch from committed code. Commit or stash local changes first.'
+                  : projects.find((item) => item.id === project)
+                        ?.workspaceMode === 'direct'
+                    ? 'Direct folder: live implementation edits the source files.'
+                    : 'Isolated: each run works on a copy.'}
+              </p>
+              <div className="project-actions">
+                <button
+                  type="button"
+                  className="button button-ghost add-project-button"
+                  disabled={submitting}
+                  onClick={onConnect}
+                >
+                  Connect folder
+                </button>
+                <button
+                  type="button"
+                  className="button button-ghost add-project-button"
+                  disabled={submitting}
+                  onClick={() => {
+                    setAddingProject(true);
+                  }}
+                >
+                  Import a copy
+                </button>
+              </div>
+            </div>
+
+            <div className="field">
+              <label htmlFor={workflowId}>Workflow</label>
+              <select
+                id={workflowId}
+                value={workflowSelection}
+                required
+                disabled={submitting || workflows.length === 0}
+                onChange={(event) => {
+                  setWorkflowSelection(event.target.value);
+                }}
+              >
+                {workflows.length === 0 ? (
+                  <option value="">No workflows found</option>
+                ) : null}
+                {workflows.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="field">
+              <label htmlFor={modeId}>Mode</label>
+              <select
+                id={modeId}
+                value={mode}
+                required
+                aria-describedby={modeHelpId}
+                disabled={submitting}
+                onChange={(event) => {
+                  setMode(event.target.value === 'demo' ? 'demo' : 'live');
+                }}
+              >
+                <option value="live">Live</option>
+                <option value="demo">Demo</option>
+              </select>
+              <p className="field-helper" id={modeHelpId}>
+                {mode === 'live'
+                  ? 'Uses your configured providers and may incur usage costs.'
+                  : 'Simulates the workflow. No provider calls or charges.'}
+              </p>
+            </div>
           </div>
-        ) : null}
 
-        <div className="form-grid">
-          <div className="field">
-            <label htmlFor={titleId}>Task title</label>
-            <input
-              ref={titleInputRef}
-              id={titleId}
-              type="text"
-              value={title}
-              maxLength={120}
-              required
+          {automationEligible && (
+            <div className="field">
+              <label htmlFor={`${fieldId}-delivery`}>Delivery</label>
+              <select
+                id={`${fieldId}-delivery`}
+                value={delivery}
+                onChange={(e) => {
+                  setDelivery(e.target.value);
+                }}
+                disabled={submitting}
+              >
+                <option value="manual">Manual approval gates</option>
+                <option value="draft">PR machine · automatic draft PR</option>
+              </select>
+              <p className="field-helper">
+                Approve the plan first. Jev can request up to two repairs;
+                passing tests and independent review are required. Uncertainty
+                pauses the run. Nothing merges automatically.
+              </p>
+            </div>
+          )}
+          {automationEligible &&
+            delivery === 'draft' &&
+            supportsEscalation(selectedWorkflow) && (
+              <label className="wf-checkbox field-helper">
+                <input
+                  type="checkbox"
+                  style={{ flexShrink: 0 }}
+                  checked={rescue}
+                  disabled={submitting}
+                  onChange={(e) => {
+                    setRescue(e.target.checked);
+                  }}
+                />{' '}
+                After two Flash repairs, allow one Fable rescue, then
+                independent Astra review. Remaining blockers pause delivery.
+              </label>
+            )}
+          {mode === 'live' &&
+            selectedWorkflow?.steps.at(-1)?.council &&
+            projects.find((p) => p.id === project)?.workspaceMode !==
+              'worktree' && (
+              <p className="field-helper">
+                Automatic draft PRs require a Git worktree project with a GitHub
+                origin. Change the project's access mode under Projects. This
+                run will use manual approval gates.
+              </p>
+            )}
+          <div className="dialog-actions">
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={onClose}
               disabled={submitting}
-              onChange={(event) => setTitle(event.target.value)}
-            />
-          </div>
-
-          <div className="field">
-            <label htmlFor={taskId}>Task brief</label>
-            <textarea
-              id={taskId}
-              value={task}
-              maxLength={30000}
-              required
-              rows={4}
-              disabled={submitting}
-              onChange={(event) => setTask(event.target.value)}
-            />
-          </div>
-
-          <div className="field">
-            <label htmlFor={projectId}>Project</label>
-            <select
-              id={projectId}
-              value={project}
-              required
-              disabled={submitting || projects.length === 0}
-              onChange={(event) => setProject(event.target.value)}
             >
-              {projects.length === 0 ? <option value="">No projects found</option> : null}
-              {projects.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-            <p className="field-helper">{projects.find(item => item.id === project)?.workspaceMode === 'worktree' ? 'Git worktree: a dedicated branch from committed code. Commit or stash local changes first.' : projects.find(item => item.id === project)?.workspaceMode === 'direct' ? 'Direct folder: live implementation edits the source files.' : 'Isolated: each run works on a copy.'}</p>
-            <div className="project-actions"><button type="button" className="button button-ghost add-project-button" disabled={submitting} onClick={onConnect}>Connect folder</button><button type="button" className="button button-ghost add-project-button" disabled={submitting} onClick={() => setAddingProject(true)}>Import a copy</button></div>
-          </div>
-
-          <div className="field">
-            <label htmlFor={workflowId}>Workflow</label>
-            <select
-              id={workflowId}
-              value={workflowSelection}
-              required
-              disabled={submitting || workflows.length === 0}
-              onChange={(event) => setWorkflowSelection(event.target.value)}
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn primary"
+              disabled={!canSubmit}
+              aria-busy={submitting}
             >
-              {workflows.length === 0 ? <option value="">No workflows found</option> : null}
-              {workflows.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
+              {crate ? 'Create crate' : 'Start run'}
+            </button>
           </div>
 
-          <div className="field">
-            <label htmlFor={modeId}>Mode</label>
-            <select
-              id={modeId}
-              value={mode}
-              required
-              aria-describedby={modeHelpId}
-              disabled={submitting}
-              onChange={(event) => setMode(event.target.value === 'demo' ? 'demo' : 'live')}
-            >
-              <option value="live">Live</option>
-              <option value="demo">Demo</option>
-            </select>
-            <p className="field-helper" id={modeHelpId}>
-              {mode === 'live' ? 'Uses your configured providers and may incur usage costs.' : 'Simulates the workflow. No provider calls or charges.'}
-            </p>
-          </div>
-        </div>
-
-        {automationEligible&&<div className="field"><label htmlFor={`${fieldId}-delivery`}>Delivery</label><select id={`${fieldId}-delivery`} value={delivery} onChange={e=>setDelivery(e.target.value)} disabled={submitting}><option value="manual">Manual approval gates</option><option value="draft">PR machine · automatic draft PR</option></select><p className="field-helper">Approve the plan first. Jev can request up to two repairs; passing tests and independent review are required. Uncertainty pauses the run. Nothing merges automatically.</p></div>}
-        {automationEligible && delivery==='draft' && selectedWorkflow && supportsEscalation(selectedWorkflow) && <label className="wf-checkbox field-helper"><input type="checkbox" style={{flexShrink:0}} checked={rescue} disabled={submitting} onChange={e=>setRescue(e.target.checked)} /> After two Flash repairs, allow one Fable rescue, then independent Astra review. Remaining blockers pause delivery.</label>}
-        {mode==='live' && selectedWorkflow?.steps.at(-1)?.council && projects.find(p=>p.id===project)?.workspaceMode!=='worktree' && <p className="field-helper">Automatic draft PRs require a Git worktree project with a GitHub origin. Change the project's access mode under Projects. This run will use manual approval gates.</p>}
-        <div className="dialog-actions">
-          <button type="button" className="btn ghost" onClick={onClose} disabled={submitting}>
-            Cancel
-          </button>
-          <button type="submit" className="btn primary" disabled={!canSubmit} aria-busy={submitting}>
-            {crate ? 'Create crate' : 'Start run'}
-          </button>
-        </div>
-
-        <p className="dialog-footer-note">
-          Folder access follows the selected project's workspace mode.
-        </p>
-      </form>}
+          <p className="dialog-footer-note">
+            Folder access follows the selected project's workspace mode.
+          </p>
+        </form>
+      )}
     </dialog>
   );
 }

@@ -1,6 +1,12 @@
 import { Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ProjectInfo, ProviderInfo, Run, RunEvent, Workflow } from '../shared/types.js';
+import type {
+  ProjectInfo,
+  ProviderInfo,
+  Run,
+  RunEvent,
+  Workflow,
+} from '../shared/types.js';
 import NewRunDialog from './NewRunDialog';
 import ProvidersView from './ProvidersView';
 import RunDetail from './RunDetail';
@@ -12,7 +18,8 @@ import { useUrlState, useUrlSelection, updateUrl } from './url-state';
 
 type ViewId = 'crates' | 'runs' | 'projects' | 'workflows' | 'agents';
 type RunActionId = 'approve' | 'revise' | 'rework' | 'retry' | 'cancel';
-type ErrorKey = 'runs' | 'workflows' | 'projects' | 'providers' | 'events' | 'action';
+type ErrorKey =
+  'runs' | 'workflows' | 'projects' | 'providers' | 'events' | 'action';
 
 const RUN_POLL_MS = 1500;
 
@@ -29,7 +36,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message !== '' ? error.message : 'Something went wrong.';
+  return error instanceof Error && error.message !== ''
+    ? error.message
+    : 'Something went wrong.';
 }
 
 async function readErrorMessage(response: Response): Promise<string> {
@@ -37,14 +46,18 @@ async function readErrorMessage(response: Response): Promise<string> {
   if (text !== '') {
     try {
       const parsed: unknown = JSON.parse(text);
-      if (isRecord(parsed) && typeof parsed.error === 'string' && parsed.error !== '') {
+      if (
+        isRecord(parsed) &&
+        typeof parsed.error === 'string' &&
+        parsed.error !== ''
+      ) {
         return parsed.error;
       }
     } catch {
       /* Body was not JSON; fall back to the HTTP status. */
     }
   }
-  return `Request failed (HTTP ${response.status}).`;
+  return `Request failed (HTTP ${String(response.status)}).`;
 }
 
 async function getJson<T>(url: string): Promise<T> {
@@ -54,15 +67,43 @@ async function getJson<T>(url: string): Promise<T> {
 }
 
 export default function App() {
-  const [view, setView] = useUrlState<ViewId>('view', ['run','q','mode','scope'].some(key=>new URLSearchParams(window.location.search).has(key))?'runs':'crates', ['crates','runs', 'projects', 'workflows', 'agents']);
+  const [view, setView] = useUrlState<ViewId>(
+    'view',
+    ['run', 'q', 'mode', 'scope'].some((key) =>
+      new URLSearchParams(window.location.search).has(key),
+    )
+      ? 'runs'
+      : 'crates',
+    ['crates', 'runs', 'projects', 'workflows', 'agents'],
+  );
 
   const [runs, setRuns] = useState<Run[]>([]);
   const [runsLoading, setRunsLoading] = useState(true);
   const runsInFlightRef = useRef(false);
 
   const [selectedRunId] = useUrlSelection('run');
-  const setSelectedRunId = useCallback((id: string | null) => updateUrl({ view: 'runs', run: id, step: null, tab: null, file: null, activity: null }), []);
-  const openCrate = useCallback((id:string)=>updateUrl({view:'crates',run:id,crateNode:null,crateTab:null,step:null,tab:null,file:null,activity:null}),[]);
+  const setSelectedRunId = useCallback((id: string | null) => {
+    updateUrl({
+      view: 'runs',
+      run: id,
+      step: null,
+      tab: null,
+      file: null,
+      activity: null,
+    });
+  }, []);
+  const openCrate = useCallback((id: string) => {
+    updateUrl({
+      view: 'crates',
+      run: id,
+      crateNode: null,
+      crateTab: null,
+      step: null,
+      tab: null,
+      file: null,
+      activity: null,
+    });
+  }, []);
   const streamingRunRef = useRef<string | null>(null);
 
   const [events, setEvents] = useState<RunEvent[]>([]);
@@ -77,45 +118,45 @@ export default function App() {
   const [providersLoading, setProvidersLoading] = useState(true);
 
   const [errors, setErrors] = useState<Partial<Record<ErrorKey, string>>>({});
-  const setResourceError = useCallback((key: ErrorKey, message: string | null): void => {
-    setErrors((previous) => {
-      if (message === null) {
-        if (previous[key] === undefined) return previous;
-        const next = { ...previous };
-        delete next[key];
-        return next;
-      }
-      if (previous[key] === message) return previous;
-      return { ...previous, [key]: message };
-    });
-  }, []);
+  const setResourceError = useCallback(
+    (key: ErrorKey, message: string | null): void => {
+      setErrors((previous) => {
+        if (message === null) {
+          if (previous[key] === undefined) return previous;
+          return { ...previous, [key]: undefined };
+        }
+        if (previous[key] === message) return previous;
+        return { ...previous, [key]: message };
+      });
+    },
+    [],
+  );
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogInitialDemo, setDialogInitialDemo] = useState(false);
   const [dialogProject, setDialogProject] = useState<string | null>(null);
   const [connectRequest, setConnectRequest] = useState(0);
 
-  const loadRuns = useCallback(
-    async (): Promise<void> => {
-      if (runsInFlightRef.current) return;
-      runsInFlightRef.current = true;
-      try {
-        const list = await getJson<Run[]>('/api/runs');
-        setRuns(previous => list.map(run => {
-          const current = previous.find(item => item.id === run.id);
+  const loadRuns = useCallback(async (): Promise<void> => {
+    if (runsInFlightRef.current) return;
+    runsInFlightRef.current = true;
+    try {
+      const list = await getJson<Run[]>('/api/runs');
+      setRuns((previous) =>
+        list.map((run) => {
+          const current = previous.find((item) => item.id === run.id);
           // A stalled SSE connection must not suppress a newer durable snapshot.
           return current && current.updatedAt >= run.updatedAt ? current : run;
-        }));
-        setResourceError('runs', null);
-      } catch (error) {
-        setResourceError('runs', `Unable to load runs: ${errorMessage(error)}`);
-      } finally {
-        runsInFlightRef.current = false;
-        setRunsLoading(false);
-      }
-    },
-    [setResourceError],
-  );
+        }),
+      );
+      setResourceError('runs', null);
+    } catch (error) {
+      setResourceError('runs', `Unable to load runs: ${errorMessage(error)}`);
+    } finally {
+      runsInFlightRef.current = false;
+      setRunsLoading(false);
+    }
+  }, [setResourceError]);
 
   const loadWorkflows = useCallback(async (): Promise<void> => {
     try {
@@ -123,7 +164,10 @@ export default function App() {
       setWorkflows(list);
       setResourceError('workflows', null);
     } catch (error) {
-      setResourceError('workflows', `Unable to load workflows: ${errorMessage(error)}`);
+      setResourceError(
+        'workflows',
+        `Unable to load workflows: ${errorMessage(error)}`,
+      );
     } finally {
       setWorkflowsLoading(false);
     }
@@ -135,7 +179,10 @@ export default function App() {
       setProjects(list);
       setResourceError('projects', null);
     } catch (error) {
-      setResourceError('projects', `Unable to load projects: ${errorMessage(error)}`);
+      setResourceError(
+        'projects',
+        `Unable to load projects: ${errorMessage(error)}`,
+      );
     }
   }, [setResourceError]);
 
@@ -146,13 +193,18 @@ export default function App() {
       setProviders(list);
       setResourceError('providers', null);
     } catch (error) {
-      setResourceError('providers', `Unable to load providers: ${errorMessage(error)}`);
+      setResourceError(
+        'providers',
+        `Unable to load providers: ${errorMessage(error)}`,
+      );
     } finally {
       setProvidersLoading(false);
     }
   }, [setResourceError]);
 
-  useEffect(() => { if (view === 'projects') void loadProjects(); }, [view, loadProjects]);
+  useEffect(() => {
+    if (view === 'projects') void loadProjects();
+  }, [view, loadProjects]);
 
   useEffect(() => {
     void loadRuns();
@@ -165,13 +217,17 @@ export default function App() {
     const timer = window.setInterval(() => {
       void loadRuns();
     }, RUN_POLL_MS);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+    };
   }, [loadRuns]);
+
+  const selectedRunExists = runs.some((run) => run.id === selectedRunId);
 
   useEffect(() => {
     setEvents([]);
     eventsCursorRef.current = 0;
-    if (selectedRunId === null || !runs.some(run => run.id === selectedRunId)) return;
+    if (selectedRunId === null || !selectedRunExists) return;
 
     let stale = false;
     let inFlight = false;
@@ -181,7 +237,7 @@ export default function App() {
       inFlight = true;
       try {
         const batch = await getJson<RunEvent[]>(
-          `/api/runs/${encodeURIComponent(selectedRunId)}/events?after=${eventsCursorRef.current}`,
+          `/api/runs/${encodeURIComponent(selectedRunId)}/events?after=${String(eventsCursorRef.current)}`,
         );
         if (stale) return;
         if (batch.length > 0) {
@@ -204,7 +260,11 @@ export default function App() {
         }
         setResourceError('events', null);
       } catch (error) {
-        if (!stale) setResourceError('events', `Unable to load activity: ${errorMessage(error)}`);
+        if (!stale)
+          setResourceError(
+            'events',
+            `Unable to load activity: ${errorMessage(error)}`,
+          );
       } finally {
         inFlight = false;
       }
@@ -218,41 +278,68 @@ export default function App() {
       stale = true;
       window.clearInterval(timer);
     };
-  }, [selectedRunId, runs.some(run => run.id === selectedRunId), setResourceError]);
+  }, [selectedRunId, selectedRunExists, setResourceError]);
 
   useEffect(() => {
-    if (!selectedRunId || !runs.some(run => run.id === selectedRunId)) return;
-    const source = new EventSource(`/api/runs/${encodeURIComponent(selectedRunId)}/stream`);
-    source.addEventListener('run', event => {
-      const updated = JSON.parse((event as MessageEvent).data) as Run;
+    if (!selectedRunId || !selectedRunExists) return;
+    const source = new EventSource(
+      `/api/runs/${encodeURIComponent(selectedRunId)}/stream`,
+    );
+    source.addEventListener('run', (event) => {
+      const parsed: unknown = JSON.parse(String(event.data));
+      if (!isRecord(parsed) || typeof parsed.id !== 'string') return;
+      const updated = parsed as unknown as Run;
       if (updated.id !== selectedRunId) return;
       streamingRunRef.current = selectedRunId;
-      setRuns(previous => previous.map(run => run.id === updated.id && run.updatedAt <= updated.updatedAt ? updated : run));
+      setRuns((previous) =>
+        previous.map((run) =>
+          run.id === updated.id && run.updatedAt <= updated.updatedAt
+            ? updated
+            : run,
+        ),
+      );
     });
-    source.onerror = () => { streamingRunRef.current = null; };
-    return () => { source.close(); streamingRunRef.current = null; };
-  }, [selectedRunId, runs.some(run => run.id === selectedRunId)]);
+    source.onerror = () => {
+      streamingRunRef.current = null;
+    };
+    return () => {
+      source.close();
+      streamingRunRef.current = null;
+    };
+  }, [selectedRunId, selectedRunExists]);
 
   useEffect(() => {
     setResourceError('action', null);
   }, [selectedRunId, setResourceError]);
 
   const selectedRun = useMemo(
-    () => (selectedRunId === null ? null : runs.find((run) => run.id === selectedRunId) ?? null),
+    () =>
+      selectedRunId === null
+        ? null
+        : (runs.find((run) => run.id === selectedRunId) ?? null),
     [runs, selectedRunId],
   );
 
   useEffect(() => {
-    const heading = document.querySelector<HTMLElement>('.main:not([hidden]) h1');
+    const heading = document.querySelector<HTMLElement>(
+      '.main:not([hidden]) h1',
+    );
     heading?.focus({ preventScroll: true });
     window.scrollTo({ top: 0 });
   }, [view, selectedRunId]);
 
-  const handleCreated = useCallback((run: Run): void => {
-    setRuns((previous) => [run, ...previous.filter((item) => item.id !== run.id)]);
-    if(view==='crates')openCrate(run.id);else setSelectedRunId(run.id);
-    setDialogOpen(false);
-  }, [setSelectedRunId,openCrate,view]);
+  const handleCreated = useCallback(
+    (run: Run): void => {
+      setRuns((previous) => [
+        run,
+        ...previous.filter((item) => item.id !== run.id),
+      ]);
+      if (view === 'crates') openCrate(run.id);
+      else setSelectedRunId(run.id);
+      setDialogOpen(false);
+    },
+    [setSelectedRunId, openCrate, view],
+  );
 
   const handleBack = useCallback((): void => {
     setSelectedRunId(null);
@@ -269,7 +356,11 @@ export default function App() {
   }, []);
 
   const handleAction = useCallback(
-    async (action: RunActionId, feedback?: string, acknowledgedAssessment?: string): Promise<void> => {
+    async (
+      action: RunActionId,
+      feedback?: string,
+      acknowledgedAssessment?: string,
+    ): Promise<void> => {
       if (selectedRunId === null) return;
       setActionBusy(true);
       setResourceError('action', null);
@@ -279,7 +370,13 @@ export default function App() {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(action === 'revise' ? { feedback: feedback ?? '' } : action === 'approve' && acknowledgedAssessment ? { acknowledgedAssessment } : {}),
+            body: JSON.stringify(
+              action === 'revise'
+                ? { feedback: feedback ?? '' }
+                : action === 'approve' && acknowledgedAssessment
+                  ? { acknowledgedAssessment }
+                  : {},
+            ),
           },
         );
         if (!response.ok) throw new Error(await readErrorMessage(response));
@@ -295,23 +392,41 @@ export default function App() {
     [selectedRunId, loadRuns, setResourceError],
   );
 
-  function openDialog(initialDemo: boolean, projectId: string | null = null): void {
+  function openDialog(
+    initialDemo: boolean,
+    projectId: string | null = null,
+  ): void {
     void loadProjects();
     setDialogProject(projectId);
     setDialogInitialDemo(initialDemo);
     setDialogOpen(true);
   }
 
-  async function sendPlanningMessage(stepId: string, message: string, messageId: string): Promise<void> {
+  async function sendPlanningMessage(
+    stepId: string,
+    message: string,
+    messageId: string,
+  ): Promise<void> {
     if (!selectedRunId) throw new Error('Select a run first.');
     setActionBusy(true);
     try {
-      const response = await fetch(`/api/runs/${encodeURIComponent(selectedRunId)}/messages`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stepId, message, messageId }),
-      });
+      const response = await fetch(
+        `/api/runs/${encodeURIComponent(selectedRunId)}/messages`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stepId, message, messageId }),
+        },
+      );
       if (!response.ok) throw new Error(await readErrorMessage(response));
-      const updated = await response.json() as Run;
-      setRuns(previous => previous.map(run => run.id === updated.id && run.updatedAt <= updated.updatedAt ? updated : run));
+      const updated = (await response.json()) as Run;
+      setRuns((previous) =>
+        previous.map((run) =>
+          run.id === updated.id && run.updatedAt <= updated.updatedAt
+            ? updated
+            : run,
+        ),
+      );
     } finally {
       setActionBusy(false);
     }
@@ -324,34 +439,188 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <span className="wordmark">AgentLoom<span className="brand-dot" aria-hidden="true">.</span></span>
+        <span className="wordmark">
+          AgentLoom
+          <span className="brand-dot" aria-hidden="true">
+            .
+          </span>
+        </span>
         <nav className="nav" aria-label="Primary">
-          {NAV_ITEMS.map(item => <button key={item.id} type="button" className={`nav-button${view === item.id ? ' active' : ''}`} aria-current={view === item.id ? 'page' : undefined} onClick={() => { if (item.id === 'runs') setSelectedRunId(null); else setView(item.id); }}>{item.label}</button>)}
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`nav-button${view === item.id ? ' active' : ''}`}
+              aria-current={view === item.id ? 'page' : undefined}
+              onClick={() => {
+                if (item.id === 'runs') setSelectedRunId(null);
+                else setView(item.id);
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
         </nav>
-        <button type="button" className="button button-primary" onClick={() => openDialog(false)}><Plus size={16} aria-hidden="true" />{view === 'crates' ? 'New crate' : 'New run'}</button>
+        <button
+          type="button"
+          className="button button-primary"
+          onClick={() => {
+            openDialog(false);
+          }}
+        >
+          <Plus size={16} aria-hidden="true" />
+          {view === 'crates' ? 'New crate' : 'New run'}
+        </button>
       </header>
 
-      {activeErrors.length > 0 && <div className="alerts">{activeErrors.map(([key, message]) => <p key={key} role="alert" className="alert">{message}</p>)}</div>}
+      {activeErrors.length > 0 && (
+        <div className="alerts">
+          {activeErrors.map(([key, message]) => (
+            <p key={key} role="alert" className="alert">
+              {message}
+            </p>
+          ))}
+        </div>
+      )}
 
-      <main className="main crates-main" hidden={view !== 'crates'}>{view==='crates'&&<CratesView runs={runs} selected={selectedRun} loading={runsLoading} events={events} busy={actionBusy} onOpen={openCrate} onNew={()=>openDialog(false)} refresh={loadRuns} onAction={handleAction} onMessage={sendPlanningMessage}/>}</main>
+      <main className="main crates-main" hidden={view !== 'crates'}>
+        {view === 'crates' && (
+          <CratesView
+            runs={runs}
+            selected={selectedRun}
+            loading={runsLoading}
+            events={events}
+            busy={actionBusy}
+            onOpen={openCrate}
+            onNew={() => {
+              openDialog(false);
+            }}
+            refresh={loadRuns}
+            onAction={handleAction}
+            onMessage={sendPlanningMessage}
+          />
+        )}
+      </main>
       <main className="main" hidden={view !== 'runs'}>
-        {selectedRunId && !selectedRun && <section><h1 tabIndex={-1}>{runsLoading ? 'Loading run?' : errors.runs ? 'Unable to load run' : 'Run not found'}</h1><p className="page-lede">{runsLoading ? 'Restoring your view.' : 'This link could not be opened. You can return to the run list.'}</p><button className="button" onClick={handleBack}>Back to runs</button></section>}
-        {view==='runs' && selectedRun && <RunDetail key={selectedRun.id} run={selectedRun} events={events} busy={actionBusy} onAction={handleAction} onBack={handleBack} onMessage={sendPlanningMessage} />}
-        <div hidden={selectedRunId !== null}><RunOverview runs={runs} loading={runsLoading} onOpen={setSelectedRunId} /></div>
+        {selectedRunId && !selectedRun && (
+          <section>
+            <h1 tabIndex={-1}>
+              {runsLoading
+                ? 'Loading run?'
+                : errors.runs
+                  ? 'Unable to load run'
+                  : 'Run not found'}
+            </h1>
+            <p className="page-lede">
+              {runsLoading
+                ? 'Restoring your view.'
+                : 'This link could not be opened. You can return to the run list.'}
+            </p>
+            <button className="button" onClick={handleBack}>
+              Back to runs
+            </button>
+          </section>
+        )}
+        {view === 'runs' && selectedRun && (
+          <RunDetail
+            key={selectedRun.id}
+            run={selectedRun}
+            events={events}
+            busy={actionBusy}
+            onAction={handleAction}
+            onBack={handleBack}
+            onMessage={sendPlanningMessage}
+          />
+        )}
+        <div hidden={selectedRunId !== null}>
+          <RunOverview
+            runs={runs}
+            loading={runsLoading}
+            onOpen={setSelectedRunId}
+          />
+        </div>
       </main>
 
       <main className="main" hidden={view !== 'workflows'}>
-        <header className="page-head"><div><h1 className="page-title" tabIndex={-1}>Workflows</h1><p className="page-lede">Choose a workflow to edit its steps. Changes apply to new runs.</p></div></header>
-        {workflowsLoading ? <p className="empty-note">Loading workflows...</p> : <WorkflowEditor workflows={workflows} onSaved={handleWorkflowSaved} />}
+        <header className="page-head">
+          <div>
+            <h1 className="page-title" tabIndex={-1}>
+              Workflows
+            </h1>
+            <p className="page-lede">
+              Choose a workflow to edit its steps. Changes apply to new runs.
+            </p>
+          </div>
+        </header>
+        {workflowsLoading ? (
+          <p className="empty-note">Loading workflows...</p>
+        ) : (
+          <WorkflowEditor workflows={workflows} onSaved={handleWorkflowSaved} />
+        )}
       </main>
 
-      <main className="main" hidden={view !== 'projects'}><ProjectsView projects={projects} runs={runs} refresh={loadProjects} connectRequest={connectRequest} onRun={id => openDialog(false, id)} onOpenRun={setSelectedRunId} /></main>
+      <main className="main" hidden={view !== 'projects'}>
+        <ProjectsView
+          projects={projects}
+          runs={runs}
+          refresh={loadProjects}
+          connectRequest={connectRequest}
+          onRun={(id) => {
+            openDialog(false, id);
+          }}
+          onOpenRun={setSelectedRunId}
+        />
+      </main>
 
       <main className="main" hidden={view !== 'agents'}>
-        <header className="page-head"><div><h1 className="page-title" tabIndex={-1}>Agents</h1><p className="page-lede">Manage provider connections and credentials.</p></div></header>
-        <ProvidersView providers={providers} loading={providersLoading} onRefresh={() => { void loadProviders(); }} />
+        <header className="page-head">
+          <div>
+            <h1 className="page-title" tabIndex={-1}>
+              Agents
+            </h1>
+            <p className="page-lede">
+              Manage provider connections and credentials.
+            </p>
+          </div>
+        </header>
+        <ProvidersView
+          providers={providers}
+          loading={providersLoading}
+          onRefresh={() => {
+            void loadProviders();
+          }}
+        />
       </main>
-      <NewRunDialog crate={view==='crates'} open={dialogOpen} initialDemo={dialogInitialDemo} initialProject={dialogProject} workflows={workflows.filter(workflow => !workflow.archived)} projects={projects.filter(project => (!project.status || project.status === 'active') && project.available !== false)} onConnect={() => { setDialogOpen(false); setView('projects'); setConnectRequest(value => value + 1); }} onClose={() => setDialogOpen(false)} onCreated={handleCreated} onProjectCreated={project => { setProjects(previous => [...previous.filter(item => item.id !== project.id), project].sort((a, b) => a.name.localeCompare(b.name))); void loadProjects(); }} />
+      <NewRunDialog
+        crate={view === 'crates'}
+        open={dialogOpen}
+        initialDemo={dialogInitialDemo}
+        initialProject={dialogProject}
+        workflows={workflows.filter((workflow) => !workflow.archived)}
+        projects={projects.filter(
+          (project) =>
+            (!project.status || project.status === 'active') &&
+            project.available !== false,
+        )}
+        onConnect={() => {
+          setDialogOpen(false);
+          setView('projects');
+          setConnectRequest((value) => value + 1);
+        }}
+        onClose={() => {
+          setDialogOpen(false);
+        }}
+        onCreated={handleCreated}
+        onProjectCreated={(project) => {
+          setProjects((previous) =>
+            [
+              ...previous.filter((item) => item.id !== project.id),
+              project,
+            ].sort((a, b) => a.name.localeCompare(b.name)),
+          );
+          void loadProjects();
+        }}
+      />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { FormEvent } from 'react';
+import type { SubmitEvent } from 'react';
 import type { ProviderId, StepDefinition, Workflow } from '../shared/types';
 import { suggestedCatalog, type ModelCatalog } from '../shared/model-catalog';
 import ModelPicker from './ModelPicker';
@@ -40,13 +40,25 @@ export default function WorkflowEditor({
   onSaved: (workflow: Workflow) => void;
 }) {
   const [showArchived, setShowArchived] = useState(false);
-  const visibleWorkflows = workflows.filter(workflow => showArchived || !workflow.archived);
-  const [selectedId, setSelectedId] = useUrlSelection('workflow', visibleWorkflows[0]?.id ?? null);
+  const visibleWorkflows = workflows.filter(
+    (workflow) => showArchived || !workflow.archived,
+  );
+  const [selectedId, setSelectedId] = useUrlSelection(
+    'workflow',
+    visibleWorkflows[0]?.id ?? null,
+  );
   const [draft, setDraft] = useState<Workflow | null>(null);
   const [saving, setSaving] = useState(false);
-  const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
-  const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
-  const [catalogs, setCatalogs] = useState<Partial<Record<ProviderId, { catalog?: ModelCatalog; loading: boolean }>>>({});
+  const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>(
+    {},
+  );
+  const [message, setMessage] = useState<{
+    kind: 'ok' | 'error';
+    text: string;
+  } | null>(null);
+  const [catalogs, setCatalogs] = useState<
+    Partial<Record<ProviderId, { catalog?: ModelCatalog; loading: boolean }>>
+  >({});
   const catalogSequence = useRef<Partial<Record<ProviderId, number>>>({});
   const catalogAbort = useRef<AbortController | null>(null);
 
@@ -59,30 +71,63 @@ export default function WorkflowEditor({
     };
   }, []);
 
-  const loadCatalog = useCallback(async (provider: ProviderId, refresh: boolean): Promise<void> => {
-    const sequence = (catalogSequence.current[provider] ?? 0) + 1;
-    catalogSequence.current[provider] = sequence;
-    const signal = catalogAbort.current?.signal;
-    setCatalogs((previous) => ({ ...previous, [provider]: { ...previous[provider], loading: true } }));
-    try {
-      const response = await fetch(`/api/providers/${provider}/models${refresh ? '/refresh' : ''}`, {
-        method: refresh ? 'POST' : 'GET',
-        ...(refresh ? { headers: { 'Content-Type': 'application/json' }, body: '{}' } : {}),
-        signal,
-      });
-      if (!response.ok) throw new Error(`Model catalog request failed (${response.status})`);
-      const body = (await response.json()) as ModelCatalog;
-      if (signal?.aborted || catalogSequence.current[provider] !== sequence || body.provider !== provider) return;
-      setCatalogs((previous) => ({ ...previous, [provider]: { catalog: body, loading: false } }));
-    } catch {
-      if (signal?.aborted || catalogSequence.current[provider] !== sequence) return;
-      setCatalogs((previous) => ({ ...previous, [provider]: { catalog: suggestedCatalog(provider, 'failed'), loading: false } }));
-    }
-  }, []);
+  const loadCatalog = useCallback(
+    async (provider: ProviderId, refresh: boolean): Promise<void> => {
+      const sequence = (catalogSequence.current[provider] ?? 0) + 1;
+      catalogSequence.current[provider] = sequence;
+      const signal = catalogAbort.current?.signal;
+      setCatalogs((previous) => ({
+        ...previous,
+        [provider]: { ...previous[provider], loading: true },
+      }));
+      try {
+        const response = await fetch(
+          `/api/providers/${provider}/models${refresh ? '/refresh' : ''}`,
+          {
+            method: refresh ? 'POST' : 'GET',
+            ...(refresh
+              ? { headers: { 'Content-Type': 'application/json' }, body: '{}' }
+              : {}),
+            signal,
+          },
+        );
+        if (!response.ok)
+          throw new Error(
+            `Model catalog request failed (${String(response.status)})`,
+          );
+        const body = (await response.json()) as ModelCatalog;
+        if (
+          signal?.aborted ||
+          catalogSequence.current[provider] !== sequence ||
+          body.provider !== provider
+        )
+          return;
+        setCatalogs((previous) => ({
+          ...previous,
+          [provider]: { catalog: body, loading: false },
+        }));
+      } catch {
+        if (signal?.aborted || catalogSequence.current[provider] !== sequence)
+          return;
+        setCatalogs((previous) => ({
+          ...previous,
+          [provider]: {
+            catalog: suggestedCatalog(provider, 'failed'),
+            loading: false,
+          },
+        }));
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
-    if (!visibleWorkflows.some(w => w.id === selectedId)) setSelectedId(visibleWorkflows[0]?.id ?? null);
-  }, [workflows, selectedId, showArchived]);
+    const visible = workflows.filter(
+      (workflow) => showArchived || !workflow.archived,
+    );
+    if (!visible.some((workflow) => workflow.id === selectedId))
+      setSelectedId(visible[0]?.id ?? null);
+  }, [workflows, selectedId, showArchived, setSelectedId]);
 
   useEffect(() => {
     const selected = workflows.find((w) => w.id === selectedId);
@@ -94,22 +139,23 @@ export default function WorkflowEditor({
     setExpandedSteps({});
   }, [selectedId]);
 
-  const expandedProviders = draft === null
-    ? []
-    : Array.from(new Set(draft.steps.filter((step) => expandedSteps[step.id]).flatMap((step) => [
-        step.provider,
-        ...(step.council?.reviewers.map((member) => member.provider) ?? []),
-        ...(step.council?.secondOpinion ? [step.council.secondOpinion.provider] : []),
-      ])));
-  const expandedProviderKey = expandedProviders.join(',');
-
   useEffect(() => {
-    for (const provider of expandedProviders) {
+    if (draft === null) return;
+    const providers = new Set<ProviderId>();
+    for (const step of draft.steps) {
+      if (!expandedSteps[step.id]) continue;
+      providers.add(step.provider);
+      for (const member of step.council?.reviewers ?? [])
+        providers.add(member.provider);
+      if (step.council?.secondOpinion)
+        providers.add(step.council.secondOpinion.provider);
+    }
+    for (const provider of providers) {
       if (!catalogs[provider]) {
         void loadCatalog(provider, false);
       }
     }
-  }, [expandedProviderKey, catalogs, loadCatalog]);
+  }, [draft, expandedSteps, catalogs, loadCatalog]);
 
   function patchDraft(patch: Partial<Workflow>) {
     setDraft((current) => (current ? { ...current, ...patch } : current));
@@ -117,7 +163,14 @@ export default function WorkflowEditor({
 
   function patchStep(id: string, patch: Partial<StepDefinition>) {
     setDraft((current) =>
-      current ? { ...current, steps: current.steps.map((step) => (step.id === id ? { ...step, ...patch } : step)) } : current,
+      current
+        ? {
+            ...current,
+            steps: current.steps.map((step) =>
+              step.id === id ? { ...step, ...patch } : step,
+            ),
+          }
+        : current,
     );
   }
 
@@ -134,11 +187,13 @@ export default function WorkflowEditor({
 
   function removeStep(id: string) {
     setDraft((current) =>
-      current && current.steps.length > 1 ? { ...current, steps: current.steps.filter((step) => step.id !== id) } : current,
+      current && current.steps.length > 1
+        ? { ...current, steps: current.steps.filter((step) => step.id !== id) }
+        : current,
     );
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft || saving) return;
     if (!draft.name.trim()) {
@@ -147,28 +202,45 @@ export default function WorkflowEditor({
     }
     const unnamed = draft.steps.findIndex((step) => !step.name.trim());
     if (unnamed !== -1) {
-      setMessage({ kind: 'error', text: `Step ${unnamed + 1} needs a name.` });
+      setMessage({
+        kind: 'error',
+        text: `Step ${String(unnamed + 1)} needs a name.`,
+      });
       return;
     }
-    const missingReviewerModel = draft.steps.findIndex((step) =>
-      step.council?.reviewers.some((member) => member.model.trim().length === 0) ||
-      (step.council?.secondOpinion && !step.council.secondOpinion.model.trim()),
+    const missingReviewerModel = draft.steps.findIndex(
+      (step) =>
+        step.council?.reviewers.some(
+          (member) => member.model.trim().length === 0,
+        ) ||
+        (step.council?.secondOpinion &&
+          !step.council.secondOpinion.model.trim()),
     );
     if (missingReviewerModel !== -1) {
-      setMessage({ kind: 'error', text: `Step ${missingReviewerModel + 1} needs an explicit model for every council reviewer.` });
+      setMessage({
+        kind: 'error',
+        text: `Step ${String(missingReviewerModel + 1)} needs an explicit model for every council reviewer.`,
+      });
       return;
     }
     setSaving(true);
     setMessage(null);
     try {
-      const response = await fetch(`/api/workflows/${encodeURIComponent(draft.id)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(draft),
-      });
+      const response = await fetch(
+        `/api/workflows/${encodeURIComponent(draft.id)}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(draft),
+        },
+      );
       if (!response.ok) {
         const detail = await response.text().catch(() => '');
-        throw new Error(detail ? `Save failed (${response.status}): ${detail}` : `Save failed (${response.status}).`);
+        throw new Error(
+          detail
+            ? `Save failed (${String(response.status)}): ${detail}`
+            : `Save failed (${String(response.status)}).`,
+        );
       }
       const saved = (await response.json()) as Workflow;
       onSaved(saved);
@@ -177,7 +249,10 @@ export default function WorkflowEditor({
         text: `Saved "${saved.name}". Changes affect new runs; existing runs keep their snapshot.`,
       });
     } catch (error) {
-      setMessage({ kind: 'error', text: error instanceof Error ? error.message : 'Save failed.' });
+      setMessage({
+        kind: 'error',
+        text: error instanceof Error ? error.message : 'Save failed.',
+      });
     } finally {
       setSaving(false);
     }
@@ -187,25 +262,66 @@ export default function WorkflowEditor({
     if (!draft) return;
     setSaving(true);
     try {
-      const response = await fetch(`/api/workflows/${encodeURIComponent(draft.id)}`, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({archived})});
-      if (!response.ok) throw new Error('Unable to change workflow archive status.');
-      onSaved(await response.json() as Workflow);
-      setMessage({kind:'ok',text:archived ? 'Workflow archived. Existing runs are preserved.' : 'Workflow restored.'});
-    } catch(error) {setMessage({kind:'error',text:error instanceof Error ? error.message : 'Archive failed.'});}
-    finally {setSaving(false);}
+      const response = await fetch(
+        `/api/workflows/${encodeURIComponent(draft.id)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ archived }),
+        },
+      );
+      if (!response.ok)
+        throw new Error('Unable to change workflow archive status.');
+      onSaved((await response.json()) as Workflow);
+      setMessage({
+        kind: 'ok',
+        text: archived
+          ? 'Workflow archived. Existing runs are preserved.'
+          : 'Workflow restored.',
+      });
+    } catch (error) {
+      setMessage({
+        kind: 'error',
+        text: error instanceof Error ? error.message : 'Archive failed.',
+      });
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <section className="panel wf-editor">
-      <label className="wf-checkbox"><input type="checkbox" checked={showArchived} onChange={event=>setShowArchived(event.target.checked)} />Show archived workflows ({workflows.filter(w=>w.archived).length})</label>
-      <label className="workflow-picker">Workflow
-        <select value={selectedId ?? ''} onChange={event => setSelectedId(event.target.value)}>
-          {visibleWorkflows.map(workflow => <option key={workflow.id} value={workflow.id}>{workflow.name}{workflow.archived ? ' (archived)' : ''}</option>)}
+      <label className="wf-checkbox">
+        <input
+          type="checkbox"
+          checked={showArchived}
+          onChange={(event) => {
+            setShowArchived(event.target.checked);
+          }}
+        />
+        Show archived workflows ({workflows.filter((w) => w.archived).length})
+      </label>
+      <label className="workflow-picker">
+        Workflow
+        <select
+          value={selectedId ?? ''}
+          onChange={(event) => {
+            setSelectedId(event.target.value);
+          }}
+        >
+          {visibleWorkflows.map((workflow) => (
+            <option key={workflow.id} value={workflow.id}>
+              {workflow.name}
+              {workflow.archived ? ' (archived)' : ''}
+            </option>
+          ))}
         </select>
       </label>
 
       {visibleWorkflows.length === 0 ? (
-        <p className="wf-empty">No active workflows. Show archived workflows to restore one.</p>
+        <p className="wf-empty">
+          No active workflows. Show archived workflows to restore one.
+        </p>
       ) : (
         <div className="wf-list">
           {visibleWorkflows.map((workflow) => (
@@ -214,24 +330,43 @@ export default function WorkflowEditor({
               type="button"
               className={`button wf-item${workflow.id === selectedId ? ' is-selected' : ''}`}
               aria-pressed={workflow.id === selectedId}
-              onClick={() => setSelectedId(workflow.id)}
+              onClick={() => {
+                setSelectedId(workflow.id);
+              }}
             >
-              <strong>{workflow.name}{workflow.archived ? ' (archived)' : ''}</strong>
-              <span>{workflow.steps.length} steps &middot; {workflow.steps.filter(s => s.approval).length} approval gates</span>
+              <strong>
+                {workflow.name}
+                {workflow.archived ? ' (archived)' : ''}
+              </strong>
+              <span>
+                {workflow.steps.length} steps &middot;{' '}
+                {workflow.steps.filter((s) => s.approval).length} approval gates
+              </span>
             </button>
           ))}
         </div>
       )}
 
       {draft && (
-        <form className="wf-form" onSubmit={handleSubmit} onInvalidCapture={event => { const details = (event.target as HTMLElement).closest('details'); if (details) details.open = true; }}>
+        <form
+          className="wf-form"
+          onSubmit={(event) => {
+            void handleSubmit(event);
+          }}
+          onInvalidCapture={(event) => {
+            const details = (event.target as HTMLElement).closest('details');
+            if (details) details.open = true;
+          }}
+        >
           <label className="form-field">
             Workflow name
             <input
               value={draft.name}
               required
               maxLength={120}
-              onChange={(event) => patchDraft({ name: event.target.value })}
+              onChange={(event) => {
+                patchDraft({ name: event.target.value });
+              }}
             />
           </label>
 
@@ -240,110 +375,597 @@ export default function WorkflowEditor({
             <input
               value={draft.description}
               maxLength={2000}
-              onChange={(event) => patchDraft({ description: event.target.value })}
+              onChange={(event) => {
+                patchDraft({ description: event.target.value });
+              }}
             />
           </label>
 
-          <label className="wf-checkbox"><input type="checkbox" checked={draft.allowSplit??false} onChange={event=>patchDraft({allowSplit:event.target.checked})}/>Allow crates to split into child worktrees after planning</label>
+          <label className="wf-checkbox">
+            <input
+              type="checkbox"
+              checked={draft.allowSplit ?? false}
+              onChange={(event) => {
+                patchDraft({ allowSplit: event.target.checked });
+              }}
+            />
+            Allow crates to split into child worktrees after planning
+          </label>
           <ol className="wf-steps">
-            {draft.steps.map((step, index) => (
-              <li key={step.id}>
-                <details className="wf-step" open={expandedSteps[step.id] ?? false} onToggle={event => {
-                  const open = event.currentTarget.open;
-                  setExpandedSteps(previous => previous[step.id] === open ? previous : { ...previous, [step.id]: open });
-                }}>
-                  <summary><span>{index + 1}. {step.name || 'New step'}</span><span className="quiet">{step.council ? step.council.reviewers.length===1 ? 'One reviewer � optional second opinion' : '3 reviewers + chair' : step.validation ? 'Recorded commands + Jev' : step.provider} &middot; {step.approval ? 'Approval required' : 'Automatic'}</span></summary>
-                  <div className="wf-step-fields">
-                <div className="wf-step-header">
-                  <h3>Step {index + 1}</h3>
-                  <div className="wf-step-actions">
-                    <button type="button" className="button" aria-label={`Move step ${index + 1} up`} disabled={index === 0} onClick={() => moveStep(index, -1)}>
-                      Up
-                    </button>
-                    <button type="button" className="button" aria-label={`Move step ${index + 1} down`} disabled={index === draft.steps.length - 1} onClick={() => moveStep(index, 1)}>
-                      Down
-                    </button>
-                    <button type="button" className="button" aria-label={`Remove step ${index + 1}`} disabled={draft.steps.length === 1} onClick={() => removeStep(step.id)}>
-                      Remove
-                    </button>
-                  </div>
-                </div>
-
-                <label className="form-field">
-                  Name
-                  <input value={step.name} required maxLength={120} onChange={(event) => patchStep(step.id, { name: event.target.value })} />
-                </label>
-
-                <label className="form-field">
-                  Role
-                  <input value={step.role} maxLength={120} onChange={(event) => patchStep(step.id, { role: event.target.value })} />
-                </label>
-
-                {!step.validation && <>
-                <label className="form-field">
-                  Provider
-                  <select
-                    value={step.provider}
-                    onChange={(event) => patchStep(step.id, { provider: event.target.value as ProviderId, effort: '', model: '' })}
+            {draft.steps.map((step, index) => {
+              const council = step.council;
+              const secondOpinion = council?.secondOpinion;
+              const validation = step.validation;
+              return (
+                <li key={step.id}>
+                  <details
+                    className="wf-step"
+                    open={expandedSteps[step.id] ?? false}
+                    onToggle={(event) => {
+                      const open = event.currentTarget.open;
+                      setExpandedSteps((previous) =>
+                        previous[step.id] === open
+                          ? previous
+                          : { ...previous, [step.id]: open },
+                      );
+                    }}
                   >
-                    {PROVIDERS.map((provider) => (
-                      <option key={provider} value={provider}>{provider}</option>
-                    ))}
-                  </select>
-                </label>
+                    <summary>
+                      <span>
+                        {index + 1}. {step.name || 'New step'}
+                      </span>
+                      <span className="quiet">
+                        {council
+                          ? council.reviewers.length === 1
+                            ? 'One reviewer � optional second opinion'
+                            : '3 reviewers + chair'
+                          : step.validation
+                            ? 'Recorded commands + Jev'
+                            : step.provider}{' '}
+                        &middot;{' '}
+                        {step.approval ? 'Approval required' : 'Automatic'}
+                      </span>
+                    </summary>
+                    <div className="wf-step-fields">
+                      <div className="wf-step-header">
+                        <h3>Step {index + 1}</h3>
+                        <div className="wf-step-actions">
+                          <button
+                            type="button"
+                            className="button"
+                            aria-label={`Move step ${String(index + 1)} up`}
+                            disabled={index === 0}
+                            onClick={() => {
+                              moveStep(index, -1);
+                            }}
+                          >
+                            Up
+                          </button>
+                          <button
+                            type="button"
+                            className="button"
+                            aria-label={`Move step ${String(index + 1)} down`}
+                            disabled={index === draft.steps.length - 1}
+                            onClick={() => {
+                              moveStep(index, 1);
+                            }}
+                          >
+                            Down
+                          </button>
+                          <button
+                            type="button"
+                            className="button"
+                            aria-label={`Remove step ${String(index + 1)}`}
+                            disabled={draft.steps.length === 1}
+                            onClick={() => {
+                              removeStep(step.id);
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
 
-                <label className="form-field">
-                  Model
-                  <ModelPicker
-                    provider={step.provider}
-                    value={step.model}
-                    catalog={catalogs[step.provider]?.catalog}
-                    loading={catalogs[step.provider]?.loading ?? false}
-                    fieldKey={step.id}
-                    onChange={(model) => patchStep(step.id, { model })}
-                    onRefresh={() => { void loadCatalog(step.provider, true); }}
-                  />
-                </label>
+                      <label className="form-field">
+                        Name
+                        <input
+                          value={step.name}
+                          required
+                          maxLength={120}
+                          onChange={(event) => {
+                            patchStep(step.id, { name: event.target.value });
+                          }}
+                        />
+                      </label>
 
-                <label className="form-field">
-                  Effort
-                  <select value={step.effort} onChange={(event) => patchStep(step.id, { effort: event.target.value })}>
-                    {EFFORTS[step.provider].map((effort) => (
-                      <option key={effort || 'default'} value={effort}>{effort || 'default'}</option>
-                    ))}
-                  </select>
-                </label>
+                      <label className="form-field">
+                        Role
+                        <input
+                          value={step.role}
+                          maxLength={120}
+                          onChange={(event) => {
+                            patchStep(step.id, { role: event.target.value });
+                          }}
+                        />
+                      </label>
 
-                </>}
-                {step.council && <div className="council-editor"><p>The provider and model above configure synthesis, used only when more than one reviewer runs. Reviewers below inspect independently. Changes affect new runs.</p>{step.council.reviewers.map((member, mi) => <fieldset key={member.id}><legend>{member.name}</legend><label>Reviewer provider<select value={member.provider} onChange={event => patchStep(step.id,{council:{...step.council!,reviewers:step.council!.reviewers.map((m,i)=>i===mi?{...m,provider:event.target.value as ProviderId,model:'',effort:''}:m)}})}>{PROVIDERS.map(provider=><option key={provider}>{provider}</option>)}</select></label><label>Reviewer model<ModelPicker provider={member.provider} value={member.model} catalog={catalogs[member.provider]?.catalog} loading={catalogs[member.provider]?.loading ?? false} fieldKey={`${step.id}-reviewer-${member.id}`} label="Reviewer model" allowDefault={false} onChange={model=>patchStep(step.id,{council:{...step.council!,reviewers:step.council!.reviewers.map((m,i)=>i===mi?{...m,model}:m)}})} onRefresh={()=>{void loadCatalog(member.provider,true);}}/></label><label>Reviewer effort<select value={member.effort} onChange={event=>patchStep(step.id,{council:{...step.council!,reviewers:step.council!.reviewers.map((m,i)=>i===mi?{...m,effort:event.target.value}:m)}})}>{EFFORTS[member.provider].map(effort=><option key={effort} value={effort}>{effort||'default'}</option>)}</select></label><label>Review focus<textarea value={member.focus} maxLength={2000} required onChange={event=>patchStep(step.id,{council:{...step.council!,reviewers:step.council!.reviewers.map((m,i)=>i===mi?{...m,focus:event.target.value}:m)}})}/></label></fieldset>)}</div>}
-                {step.council?.secondOpinion && <fieldset className="council-editor"><legend>Optional second opinion</legend><label>Second reviewer provider<select value={step.council.secondOpinion.provider} onChange={e=>patchStep(step.id,{council:{...step.council!,secondOpinion:{...step.council!.secondOpinion!,provider:e.target.value as ProviderId,model:'',effort:''}}})}>{PROVIDERS.map(p=><option key={p}>{p}</option>)}</select></label><label>Second reviewer model<ModelPicker provider={step.council.secondOpinion.provider} value={step.council.secondOpinion.model} catalog={catalogs[step.council.secondOpinion.provider]?.catalog} loading={catalogs[step.council.secondOpinion.provider]?.loading ?? false} fieldKey={`${step.id}-second-opinion`} label="Second reviewer model" allowDefault={false} onChange={model=>patchStep(step.id,{council:{...step.council!,secondOpinion:{...step.council!.secondOpinion!,model}}})} onRefresh={()=>{void loadCatalog(step.council!.secondOpinion!.provider,true);}}/></label><label>Second reviewer effort<select value={step.council.secondOpinion.effort} onChange={e=>patchStep(step.id,{council:{...step.council!,secondOpinion:{...step.council!.secondOpinion!,effort:e.target.value}}})}>{EFFORTS[step.council.secondOpinion.provider].map(e=><option key={e} value={e}>{e||'default'}</option>)}</select></label></fieldset>}
-                {step.validation && <div className="validation-command-editor"><p>These exact commands are approved with the plan. Arguments are separate values, one per line. Shell operators are not interpreted.</p>{step.validation.commands.map((command,ci)=><fieldset key={ci}><legend>Command {ci+1}</legend><label>Program<input value={command.executable} required onChange={e=>patchStep(step.id,{validation:{commands:step.validation!.commands.map((c,i)=>i===ci?{...c,executable:e.target.value}:c)}})}/></label><label>Arguments (one per line)<textarea rows={2} value={command.args.join("\n")} onChange={e=>patchStep(step.id,{validation:{commands:step.validation!.commands.map((c,i)=>i===ci?{...c,args:e.target.value===""?[]:e.target.value.split("\n")}:c)}})}/></label><label>Timeout (seconds)<input type="number" min={1} max={3600} value={command.timeoutMs/1000} onChange={e=>patchStep(step.id,{validation:{commands:step.validation!.commands.map((c,i)=>i===ci?{...c,timeoutMs:Number(e.target.value)*1000}:c)}})}/></label><button type="button" className="button" disabled={step.validation!.commands.length===1} onClick={()=>patchStep(step.id,{validation:{commands:step.validation!.commands.filter((_,i)=>i!==ci)}})}>Remove command {ci+1}</button></fieldset>)}<button type="button" className="button" disabled={step.validation.commands.length>=8} onClick={()=>patchStep(step.id,{validation:{commands:[...step.validation!.commands,{executable:"npm",args:["test"],timeoutMs:600000}]}})}>Add validation command</button></div>}
-                <label className="form-field">
-                  Instructions
-                  <textarea value={step.instructions} maxLength={10000} rows={3} onChange={(event) => patchStep(step.id, { instructions: event.target.value })} />
-                </label>
+                      {!step.validation && (
+                        <>
+                          <label className="form-field">
+                            Provider
+                            <select
+                              value={step.provider}
+                              onChange={(event) => {
+                                patchStep(step.id, {
+                                  provider: event.target.value as ProviderId,
+                                  effort: '',
+                                  model: '',
+                                });
+                              }}
+                            >
+                              {PROVIDERS.map((provider) => (
+                                <option key={provider} value={provider}>
+                                  {provider}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
 
-                <label className="form-field">
-                  Access
-                  <select value={isPlanningStep(step) ? 'read-only' : step.access} disabled={isPlanningStep(step) || Boolean(step.validation || step.council)} onChange={(event) => patchStep(step.id, { access: event.target.value as StepDefinition['access'] })}>
-                    <option value="read-only">Preserve source (shell enabled)</option>
-                    <option value="workspace-write">Edit source (shell enabled)</option>
-                  </select>
-                </label>
+                          <label className="form-field">
+                            Model
+                            <ModelPicker
+                              provider={step.provider}
+                              value={step.model}
+                              catalog={catalogs[step.provider]?.catalog}
+                              loading={
+                                catalogs[step.provider]?.loading ?? false
+                              }
+                              fieldKey={step.id}
+                              onChange={(model) => {
+                                patchStep(step.id, { model });
+                              }}
+                              onRefresh={() => {
+                                void loadCatalog(step.provider, true);
+                              }}
+                            />
+                          </label>
 
-                <label className="wf-checkbox">
-                  <input type="checkbox" checked={isPlanningStep(step)} disabled={Boolean(step.validation || step.council)} onChange={event => patchStep(step.id, { planning: event.target.checked, ...(event.target.checked ? { access: 'read-only', approval: true } : {}) })} />
-                  Planning conversation
-                </label>
-                {isPlanningStep(step) && <p className="field-helper wf-checkbox">Ask questions and agree on a plan. Read-only, with approval before continuing.</p>}
-                <label className="wf-checkbox">
-                  <input type="checkbox" checked={isPlanningStep(step) || step.approval} disabled={isPlanningStep(step) || Boolean(step.council)} onChange={(event) => patchStep(step.id, { approval: event.target.checked })} />
-                  Require approval after this step
-                </label>
-                  </div>
-                </details>
-              </li>
-            ))}
+                          <label className="form-field">
+                            Effort
+                            <select
+                              value={step.effort}
+                              onChange={(event) => {
+                                patchStep(step.id, {
+                                  effort: event.target.value,
+                                });
+                              }}
+                            >
+                              {EFFORTS[step.provider].map((effort) => (
+                                <option
+                                  key={effort || 'default'}
+                                  value={effort}
+                                >
+                                  {effort || 'default'}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </>
+                      )}
+                      {council && (
+                        <div className="council-editor">
+                          <p>
+                            The provider and model above configure synthesis,
+                            used only when more than one reviewer runs.
+                            Reviewers below inspect independently. Changes
+                            affect new runs.
+                          </p>
+                          {council.reviewers.map((member, mi) => (
+                            <fieldset key={member.id}>
+                              <legend>{member.name}</legend>
+                              <label>
+                                Reviewer provider
+                                <select
+                                  value={member.provider}
+                                  onChange={(event) => {
+                                    patchStep(step.id, {
+                                      council: {
+                                        ...council,
+                                        reviewers: council.reviewers.map(
+                                          (m, i) =>
+                                            i === mi
+                                              ? {
+                                                  ...m,
+                                                  provider: event.target
+                                                    .value as ProviderId,
+                                                  model: '',
+                                                  effort: '',
+                                                }
+                                              : m,
+                                        ),
+                                      },
+                                    });
+                                  }}
+                                >
+                                  {PROVIDERS.map((provider) => (
+                                    <option key={provider}>{provider}</option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label>
+                                Reviewer model
+                                <ModelPicker
+                                  provider={member.provider}
+                                  value={member.model}
+                                  catalog={catalogs[member.provider]?.catalog}
+                                  loading={
+                                    catalogs[member.provider]?.loading ?? false
+                                  }
+                                  fieldKey={`${step.id}-reviewer-${member.id}`}
+                                  label="Reviewer model"
+                                  allowDefault={false}
+                                  onChange={(model) => {
+                                    patchStep(step.id, {
+                                      council: {
+                                        ...council,
+                                        reviewers: council.reviewers.map(
+                                          (m, i) =>
+                                            i === mi ? { ...m, model } : m,
+                                        ),
+                                      },
+                                    });
+                                  }}
+                                  onRefresh={() => {
+                                    void loadCatalog(member.provider, true);
+                                  }}
+                                />
+                              </label>
+                              <label>
+                                Reviewer effort
+                                <select
+                                  value={member.effort}
+                                  onChange={(event) => {
+                                    patchStep(step.id, {
+                                      council: {
+                                        ...council,
+                                        reviewers: council.reviewers.map(
+                                          (m, i) =>
+                                            i === mi
+                                              ? {
+                                                  ...m,
+                                                  effort: event.target.value,
+                                                }
+                                              : m,
+                                        ),
+                                      },
+                                    });
+                                  }}
+                                >
+                                  {EFFORTS[member.provider].map((effort) => (
+                                    <option key={effort} value={effort}>
+                                      {effort || 'default'}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label>
+                                Review focus
+                                <textarea
+                                  value={member.focus}
+                                  maxLength={2000}
+                                  required
+                                  onChange={(event) => {
+                                    patchStep(step.id, {
+                                      council: {
+                                        ...council,
+                                        reviewers: council.reviewers.map(
+                                          (m, i) =>
+                                            i === mi
+                                              ? {
+                                                  ...m,
+                                                  focus: event.target.value,
+                                                }
+                                              : m,
+                                        ),
+                                      },
+                                    });
+                                  }}
+                                />
+                              </label>
+                            </fieldset>
+                          ))}
+                        </div>
+                      )}
+                      {secondOpinion && (
+                        <fieldset className="council-editor">
+                          <legend>Optional second opinion</legend>
+                          <label>
+                            Second reviewer provider
+                            <select
+                              value={secondOpinion.provider}
+                              onChange={(e) => {
+                                patchStep(step.id, {
+                                  council: {
+                                    ...council,
+                                    secondOpinion: {
+                                      ...secondOpinion,
+                                      provider: e.target.value as ProviderId,
+                                      model: '',
+                                      effort: '',
+                                    },
+                                  },
+                                });
+                              }}
+                            >
+                              {PROVIDERS.map((p) => (
+                                <option key={p}>{p}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            Second reviewer model
+                            <ModelPicker
+                              provider={secondOpinion.provider}
+                              value={secondOpinion.model}
+                              catalog={
+                                catalogs[secondOpinion.provider]?.catalog
+                              }
+                              loading={
+                                catalogs[secondOpinion.provider]?.loading ??
+                                false
+                              }
+                              fieldKey={`${step.id}-second-opinion`}
+                              label="Second reviewer model"
+                              allowDefault={false}
+                              onChange={(model) => {
+                                patchStep(step.id, {
+                                  council: {
+                                    ...council,
+                                    secondOpinion: {
+                                      ...secondOpinion,
+                                      model,
+                                    },
+                                  },
+                                });
+                              }}
+                              onRefresh={() => {
+                                void loadCatalog(secondOpinion.provider, true);
+                              }}
+                            />
+                          </label>
+                          <label>
+                            Second reviewer effort
+                            <select
+                              value={secondOpinion.effort}
+                              onChange={(e) => {
+                                patchStep(step.id, {
+                                  council: {
+                                    ...council,
+                                    secondOpinion: {
+                                      ...secondOpinion,
+                                      effort: e.target.value,
+                                    },
+                                  },
+                                });
+                              }}
+                            >
+                              {EFFORTS[secondOpinion.provider].map((e) => (
+                                <option key={e} value={e}>
+                                  {e || 'default'}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </fieldset>
+                      )}
+                      {validation && (
+                        <div className="validation-command-editor">
+                          <p>
+                            These exact commands are approved with the plan.
+                            Arguments are separate values, one per line. Shell
+                            operators are not interpreted.
+                          </p>
+                          {validation.commands.map((command, ci) => (
+                            <fieldset key={ci}>
+                              <legend>Command {ci + 1}</legend>
+                              <label>
+                                Program
+                                <input
+                                  value={command.executable}
+                                  required
+                                  onChange={(e) => {
+                                    patchStep(step.id, {
+                                      validation: {
+                                        commands: validation.commands.map(
+                                          (c, i) =>
+                                            i === ci
+                                              ? {
+                                                  ...c,
+                                                  executable: e.target.value,
+                                                }
+                                              : c,
+                                        ),
+                                      },
+                                    });
+                                  }}
+                                />
+                              </label>
+                              <label>
+                                Arguments (one per line)
+                                <textarea
+                                  rows={2}
+                                  value={command.args.join('\n')}
+                                  onChange={(e) => {
+                                    patchStep(step.id, {
+                                      validation: {
+                                        commands: validation.commands.map(
+                                          (c, i) =>
+                                            i === ci
+                                              ? {
+                                                  ...c,
+                                                  args:
+                                                    e.target.value === ''
+                                                      ? []
+                                                      : e.target.value.split(
+                                                          '\n',
+                                                        ),
+                                                }
+                                              : c,
+                                        ),
+                                      },
+                                    });
+                                  }}
+                                />
+                              </label>
+                              <label>
+                                Timeout (seconds)
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={3600}
+                                  value={command.timeoutMs / 1000}
+                                  onChange={(e) => {
+                                    patchStep(step.id, {
+                                      validation: {
+                                        commands: validation.commands.map(
+                                          (c, i) =>
+                                            i === ci
+                                              ? {
+                                                  ...c,
+                                                  timeoutMs:
+                                                    Number(e.target.value) *
+                                                    1000,
+                                                }
+                                              : c,
+                                        ),
+                                      },
+                                    });
+                                  }}
+                                />
+                              </label>
+                              <button
+                                type="button"
+                                className="button"
+                                disabled={validation.commands.length === 1}
+                                onClick={() => {
+                                  patchStep(step.id, {
+                                    validation: {
+                                      commands: validation.commands.filter(
+                                        (_, i) => i !== ci,
+                                      ),
+                                    },
+                                  });
+                                }}
+                              >
+                                Remove command {ci + 1}
+                              </button>
+                            </fieldset>
+                          ))}
+                          <button
+                            type="button"
+                            className="button"
+                            disabled={validation.commands.length >= 8}
+                            onClick={() => {
+                              patchStep(step.id, {
+                                validation: {
+                                  commands: [
+                                    ...validation.commands,
+                                    {
+                                      executable: 'npm',
+                                      args: ['test'],
+                                      timeoutMs: 600000,
+                                    },
+                                  ],
+                                },
+                              });
+                            }}
+                          >
+                            Add validation command
+                          </button>
+                        </div>
+                      )}
+                      <label className="form-field">
+                        Instructions
+                        <textarea
+                          value={step.instructions}
+                          maxLength={10000}
+                          rows={3}
+                          onChange={(event) => {
+                            patchStep(step.id, {
+                              instructions: event.target.value,
+                            });
+                          }}
+                        />
+                      </label>
+
+                      <label className="form-field">
+                        Access
+                        <select
+                          value={
+                            isPlanningStep(step) ? 'read-only' : step.access
+                          }
+                          disabled={
+                            isPlanningStep(step) ||
+                            Boolean(step.validation || step.council)
+                          }
+                          onChange={(event) => {
+                            patchStep(step.id, {
+                              access: event.target
+                                .value as StepDefinition['access'],
+                            });
+                          }}
+                        >
+                          <option value="read-only">
+                            Preserve source (shell enabled)
+                          </option>
+                          <option value="workspace-write">
+                            Edit source (shell enabled)
+                          </option>
+                        </select>
+                      </label>
+
+                      <label className="wf-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={isPlanningStep(step)}
+                          disabled={Boolean(step.validation || step.council)}
+                          onChange={(event) => {
+                            patchStep(step.id, {
+                              planning: event.target.checked,
+                              ...(event.target.checked
+                                ? { access: 'read-only', approval: true }
+                                : {}),
+                            });
+                          }}
+                        />
+                        Planning conversation
+                      </label>
+                      {isPlanningStep(step) && (
+                        <p className="field-helper wf-checkbox">
+                          Ask questions and agree on a plan. Read-only, with
+                          approval before continuing.
+                        </p>
+                      )}
+                      <label className="wf-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={isPlanningStep(step) || step.approval}
+                          disabled={
+                            isPlanningStep(step) || Boolean(step.council)
+                          }
+                          onChange={(event) => {
+                            patchStep(step.id, {
+                              approval: event.target.checked,
+                            });
+                          }}
+                        />
+                        Require approval after this step
+                      </label>
+                    </div>
+                  </details>
+                </li>
+              );
+            })}
           </ol>
 
           <button
@@ -353,19 +975,36 @@ export default function WorkflowEditor({
             onClick={() => {
               const step = newStep();
               patchDraft({ steps: [...draft.steps, step] });
-              setExpandedSteps(previous => ({ ...previous, [step.id]: true }));
+              setExpandedSteps((previous) => ({
+                ...previous,
+                [step.id]: true,
+              }));
             }}
           >
             Add step
           </button>
 
           <div className="wf-submit">
-            <button type="submit" className="button button-primary" disabled={saving || draft.archived}>
+            <button
+              type="submit"
+              className="button button-primary"
+              disabled={saving || draft.archived}
+            >
               {saving ? 'Saving…' : 'Save workflow'}
             </button>
-            <button type="button" className="button" disabled={saving} onClick={()=>void setArchived(!draft.archived)}>{draft.archived ? 'Restore workflow' : 'Archive workflow'}</button>
+            <button
+              type="button"
+              className="button"
+              disabled={saving}
+              onClick={() => void setArchived(!draft.archived)}
+            >
+              {draft.archived ? 'Restore workflow' : 'Archive workflow'}
+            </button>
             {message && (
-              <p className="wf-message" role={message.kind === 'error' ? 'alert' : 'status'}>
+              <p
+                className="wf-message"
+                role={message.kind === 'error' ? 'alert' : 'status'}
+              >
                 {message.text}
               </p>
             )}

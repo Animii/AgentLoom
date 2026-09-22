@@ -34,19 +34,35 @@ const SPECS: Record<ProviderId, ProviderSpec> = {
   },
 };
 
-const DEFAULT_BINARIES: Record<ProviderId, string> = { claude: 'claude', codex: 'codex', opencode: 'opencode' };
+const DEFAULT_BINARIES: Record<ProviderId, string> = {
+  claude: 'claude',
+  codex: 'codex',
+  opencode: 'opencode',
+};
 
 export function resolveBinary(config: AppConfig, id: ProviderId): string {
   const override = config.binaries?.[id];
   if (override) return override;
-  if (id === 'opencode' && process.platform === 'win32' && process.env.APPDATA) {
-    const exe = join(process.env.APPDATA, 'npm', 'node_modules', 'opencode-ai', 'bin', 'opencode.exe');
+  if (
+    id === 'opencode' &&
+    process.platform === 'win32' &&
+    process.env.APPDATA
+  ) {
+    const exe = join(
+      process.env.APPDATA,
+      'npm',
+      'node_modules',
+      'opencode-ai',
+      'bin',
+      'opencode.exe',
+    );
     if (existsSync(exe)) return exe;
   }
   return DEFAULT_BINARIES[id];
 }
 
 function stripAnsi(text: string): string {
+  // eslint-disable-next-line no-control-regex -- stripping ANSI colour codes requires the ESC control character
   return text.replace(/\u001b\[[0-9;]*m/g, '');
 }
 
@@ -54,15 +70,28 @@ type ProbeResult = Pick<ProviderInfo, 'installed' | 'version' | 'error'>;
 
 function probe(binary: string): Promise<ProbeResult> {
   return new Promise((resolve) => {
-    execFile(binary, ['--version'], { timeout: 5000, windowsHide: true, maxBuffer: 65536 }, (error, stdout) => {
-      if (error) {
-        const message = error.message.replace(/\s+/g, ' ').trim();
-        resolve({ installed: false, version: null, error: message.slice(0, 200) });
-        return;
-      }
-      const firstLine = String(stdout).split(/\r?\n/, 1)[0] ?? '';
-      resolve({ installed: true, version: stripAnsi(firstLine).trim().slice(0, 200), error: null });
-    });
+    execFile(
+      binary,
+      ['--version'],
+      { timeout: 5000, windowsHide: true, maxBuffer: 65536 },
+      (error, stdout) => {
+        if (error) {
+          const message = error.message.replace(/\s+/g, ' ').trim();
+          resolve({
+            installed: false,
+            version: null,
+            error: message.slice(0, 200),
+          });
+          return;
+        }
+        const firstLine = stdout.split(/\r?\n/, 1)[0] ?? '';
+        resolve({
+          installed: true,
+          version: stripAnsi(firstLine).trim().slice(0, 200),
+          error: null,
+        });
+      },
+    );
   });
 }
 

@@ -9,7 +9,7 @@ services:
       - seccomp:unconfined
       - apparmor:unconfined
     ports:
-      - "127.0.0.1:${PORT:-4317}:4317"
+      - '127.0.0.1:${PORT:-4317}:4317'
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -17,10 +17,11 @@ services:
       TYPESAFE_API_KEY: ${TYPESAFE_API_KEY:-}
       CLI_TIMEOUT_MS: ${CLI_TIMEOUT_MS:-3600000}
       CLI_IDLE_TIMEOUT_MS: ${CLI_IDLE_TIMEOUT_MS:-600000}
+      MAX_OUTPUT_BYTES: ${MAX_OUTPUT_BYTES:-2097152}
       PROJECTS_ROOT: /host-projects
       PROJECTS_HOST_ROOT: ${PROJECTS_FOLDER:-..}
     group_add:
-      - "0"
+      - '0'
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - data:/data

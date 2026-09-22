@@ -1,0 +1,24 @@
+# Disposable, credential-free application validation. Never uses production mounts.
+services:
+  platform:
+    build: .
+    init: true
+    ports:
+      - '127.0.0.1:4318:4317'
+    environment:
+      ANTHROPIC_API_KEY: ''
+      OPENAI_API_KEY: ''
+      DEEPSEEK_API_KEY: ''
+      TYPESAFE_API_KEY: ''
+      PROJECTS_ROOT: /host-projects
+      PROJECTS_HOST_ROOT: /host-projects
+    volumes:
+      - validation_data:/data
+      - validation_home:/home/node
+      - validation_workspaces:/workspaces
+      - validation_projects:/host-projects
+volumes:
+  validation_data:
+  validation_home:
+  validation_workspaces:
+  validation_projects:

@@ -5,7 +5,7 @@ const seededAt = new Date().toISOString();
 export const initialWorkflows: Workflow[] = [
   {
     id: 'review-build',
-    allowSplit:true,
+    allowSplit: true,
     name: 'Review, Build and Verify',
     description:
       'Full delivery path: plan the change, design the solution, implement it, then review the result. Approval, where enabled, means the run pauses AFTER the step produces its output and BEFORE the next step starts so the user (the final approver) can accept, request a revision or stop. Every step must stop with BLOCKED if its approved requirements are missing.',
@@ -130,43 +130,167 @@ export const initialWorkflows: Workflow[] = [
   },
 ];
 
-
 export const evidenceWorkflow: Workflow = {
- id: 'evidence-delivery', name: 'Approved Task to Verified Delivery',
- description: 'Approve the task, let a cheap implementer work, record validation commands and Jev signals, then get a strong review before final human approval. Configure validation commands before creating a run.',
- updatedAt: seededAt, steps: [
- {id:'plan',name:'Approve task',role:'product owner',provider:'codex',model:'gpt-6-astra',effort:'high',access:'read-only',approval:true,planning:true,instructions:'Agree on the task with the user. Read the project, define exact scope, implementation constraints and measurable acceptance criteria. Include the configured validation commands from the system context in the plan. Resolve missing decisions through questions. Do not edit source. The user must approve before implementation.'},
- {id:'build',name:'Implement',role:'implementer',provider:'opencode',model:'deepseek/deepseek-flash',effort:'max',access:'workspace-write',approval:false,instructions:'Implement only the approved task. Do not make product, architecture or scope decisions. Report BLOCKED when a decision is missing. Add meaningful tests and install required project dependencies. The platform will execute the approved validation commands independently after you finish. Report files changed and any claims that require verification. Do not change the configured validation contract or weaken tests to make them pass.'},
- {id:'validate',name:'Tests and Jev signals',role:'validation runner',provider:'opencode',model:'',effort:'',access:'read-only',approval:false,instructions:'Execute the configured commands and record their actual exit codes and output. Jev signals are advisory. Failed validation remains visible to the independent reviewer.',validation:{commands:[{executable:'npm',args:['run','typecheck'],timeoutMs:600000},{executable:'npm',args:['test'],timeoutMs:600000},{executable:'npm',args:['run','build'],timeoutMs:600000}]}},
- {id:'review',name:'Strong review',role:'reviewer',provider:'codex',model:'gpt-6-astra',effort:'high',access:'read-only',approval:true,instructions:'Independently inspect the change against the approved task. Use the platform-recorded validation evidence and Jev signals. Do not treat implementer claims or Jev probabilities as proof. Check acceptance criteria, meaningful test coverage, scope and regressions. Preserve source files. Report BLOCKED with concrete findings when any requirement or validation remains unresolved. Otherwise provide a concise verdict with evidence references for the user to approve.'}
- ]
+  id: 'evidence-delivery',
+  name: 'Approved Task to Verified Delivery',
+  description:
+    'Approve the task, let a cheap implementer work, record validation commands and Jev signals, then get a strong review before final human approval. Configure validation commands before creating a run.',
+  updatedAt: seededAt,
+  steps: [
+    {
+      id: 'plan',
+      name: 'Approve task',
+      role: 'product owner',
+      provider: 'codex',
+      model: 'gpt-6-astra',
+      effort: 'high',
+      access: 'read-only',
+      approval: true,
+      planning: true,
+      instructions:
+        'Agree on the task with the user. Read the project, define exact scope, implementation constraints and measurable acceptance criteria. Include the configured validation commands from the system context in the plan. Resolve missing decisions through questions. Do not edit source. The user must approve before implementation.',
+    },
+    {
+      id: 'build',
+      name: 'Implement',
+      role: 'implementer',
+      provider: 'opencode',
+      model: 'deepseek/deepseek-flash',
+      effort: 'max',
+      access: 'workspace-write',
+      approval: false,
+      instructions:
+        'Implement only the approved task. Do not make product, architecture or scope decisions. Report BLOCKED when a decision is missing. Add meaningful tests and install required project dependencies. The platform will execute the approved validation commands independently after you finish. Report files changed and any claims that require verification. Do not change the configured validation contract or weaken tests to make them pass.',
+    },
+    {
+      id: 'validate',
+      name: 'Tests and Jev signals',
+      role: 'validation runner',
+      provider: 'opencode',
+      model: '',
+      effort: '',
+      access: 'read-only',
+      approval: false,
+      instructions:
+        'Execute the configured commands and record their actual exit codes and output. Jev signals are advisory. Failed validation remains visible to the independent reviewer.',
+      validation: {
+        commands: [
+          { executable: 'npm', args: ['run', 'typecheck'], timeoutMs: 600000 },
+          { executable: 'npm', args: ['test'], timeoutMs: 600000 },
+          { executable: 'npm', args: ['run', 'build'], timeoutMs: 600000 },
+        ],
+      },
+    },
+    {
+      id: 'review',
+      name: 'Strong review',
+      role: 'reviewer',
+      provider: 'codex',
+      model: 'gpt-6-astra',
+      effort: 'high',
+      access: 'read-only',
+      approval: true,
+      instructions:
+        'Independently inspect the change against the approved task. Use the platform-recorded validation evidence and Jev signals. Do not treat implementer claims or Jev probabilities as proof. Check acceptance criteria, meaningful test coverage, scope and regressions. Preserve source files. Report BLOCKED with concrete findings when any requirement or validation remains unresolved. Otherwise provide a concise verdict with evidence references for the user to approve.',
+    },
+  ],
 };
 initialWorkflows.push(evidenceWorkflow);
 
-export const crateWorkflow:Workflow={...structuredClone(evidenceWorkflow),id:'crate-delivery',name:'Crate delivery',allowSplit:true,description:'Plan a crate, optionally split approved scopes into child worktrees, integrate, validate and review. Explicit triage routes findings before human approval. PR feedback returns to the same crate.'};
+export const crateWorkflow: Workflow = {
+  ...structuredClone(evidenceWorkflow),
+  id: 'crate-delivery',
+  name: 'Crate delivery',
+  allowSplit: true,
+  description:
+    'Plan a crate, optionally split approved scopes into child worktrees, integrate, validate and review. Explicit triage routes findings before human approval. PR feedback returns to the same crate.',
+};
 initialWorkflows.push(crateWorkflow);
 
 export const councilWorkflow: Workflow = {
-  ...structuredClone(evidenceWorkflow), id:'council-delivery', name:'Approved Task with Outcome Council',
-  description:'Opt-in council: approved task, cheap implementation, recorded tests and Jev signals, three independent reviews and a chair synthesis, then your approval. One focused challenge round; no majority vote can clear blockers.',
+  ...structuredClone(evidenceWorkflow),
+  id: 'council-delivery',
+  name: 'Approved Task with Outcome Council',
+  description:
+    'Opt-in council: approved task, cheap implementation, recorded tests and Jev signals, three independent reviews and a chair synthesis, then your approval. One focused challenge round; no majority vote can clear blockers.',
 };
-councilWorkflow.steps[0].instructions += ' Assign stable acceptance criterion IDs (AC1, AC2, etc.) and explicitly define scope.';
+councilWorkflow.steps[0].instructions +=
+  ' Assign stable acceptance criterion IDs (AC1, AC2, etc.) and explicitly define scope.';
 councilWorkflow.steps[3] = {
-  ...councilWorkflow.steps[3], name:'Outcome council', role:'council reviewer',
-  instructions:'Review all approved criteria, scope, correctness and product behavior against frozen source and recorded evidence. The chair summarizes contradictions; only the user approves.',
-  council:{reviewers:[
-    {id:'correctness',name:'Correctness',focus:'Requirements, edge cases, state transitions and regressions.',provider:'codex',model:'gpt-6-astra',effort:'high'},
-    {id:'product',name:'Product and UX',focus:'Approved acceptance criteria, scope, user-visible behavior and interaction quality. For non-UI work review contracts and integration.',provider:'claude',model:'claude-fable-5-1',effort:'high'},
-    {id:'adversarial',name:'Adversarial verification',focus:'Challenge coverage and claims. Construct minimal counterexamples and regression probes. Report concrete evidence, not hypothetical concerns.',provider:'codex',model:'gpt-6-astra',effort:'high'},
-  ]},
+  ...councilWorkflow.steps[3],
+  name: 'Outcome council',
+  role: 'council reviewer',
+  instructions:
+    'Review all approved criteria, scope, correctness and product behavior against frozen source and recorded evidence. The chair summarizes contradictions; only the user approves.',
+  council: {
+    reviewers: [
+      {
+        id: 'correctness',
+        name: 'Correctness',
+        focus: 'Requirements, edge cases, state transitions and regressions.',
+        provider: 'codex',
+        model: 'gpt-6-astra',
+        effort: 'high',
+      },
+      {
+        id: 'product',
+        name: 'Product and UX',
+        focus:
+          'Approved acceptance criteria, scope, user-visible behavior and interaction quality. For non-UI work review contracts and integration.',
+        provider: 'claude',
+        model: 'claude-fable-5-1',
+        effort: 'high',
+      },
+      {
+        id: 'adversarial',
+        name: 'Adversarial verification',
+        focus:
+          'Challenge coverage and claims. Construct minimal counterexamples and regression probes. Report concrete evidence, not hypothetical concerns.',
+        provider: 'codex',
+        model: 'gpt-6-astra',
+        effort: 'high',
+      },
+    ],
+  },
 };
 initialWorkflows.push(councilWorkflow);
 
 // A new template avoids changing existing runs or user-edited workflows.
 export const singleReviewWorkflow: Workflow = {
- ...structuredClone(evidenceWorkflow), id:'single-review-delivery', name:'PR machine',
- description:'Approved task, Flash implementation, recorded tests, one Astra review and bounded Jev routing. Optional second opinion; merging remains manual.',
+  ...structuredClone(evidenceWorkflow),
+  id: 'single-review-delivery',
+  name: 'PR machine',
+  description:
+    'Approved task, Flash implementation, recorded tests, one Astra review and bounded Jev routing. Optional second opinion; merging remains manual.',
 };
-singleReviewWorkflow.steps[0].instructions += ' Assign explicit stable acceptance IDs AC1, AC2, etc. Define scope and exact tests. The final reviewer must account for every approved criterion and SCOPE.';
-singleReviewWorkflow.steps[3] = {...singleReviewWorkflow.steps[3],name:'Independent review',instructions:'Inspect the approved criteria, scope, changed source and recorded validation independently. Report concrete blockers with reproducible evidence or NEEDS_EVIDENCE for missing checks. Preserve source. Optional suggestions are warnings. Delivery follows the approved run policy; this report is evidence, not authorization.',council:{reviewers:[{id:'correctness',name:'Astra review',focus:'Independently inspect all approved criteria, source changes, recorded tests, edge cases and scope. Report only concrete in-scope defects; optional suggestions are warnings.',provider:'codex',model:'gpt-6-astra',effort:'high'}],secondOpinion:{id:'second-opinion',name:'Fable second opinion',focus:'Independently assess the approved criteria and disputed outcome. Seek reproducible counterexamples, preserve scope and separate optional suggestions from blockers.',provider:'claude',model:'claude-fable-5-1',effort:'high'}}};
+singleReviewWorkflow.steps[0].instructions +=
+  ' Assign explicit stable acceptance IDs AC1, AC2, etc. Define scope and exact tests. The final reviewer must account for every approved criterion and SCOPE.';
+singleReviewWorkflow.steps[3] = {
+  ...singleReviewWorkflow.steps[3],
+  name: 'Independent review',
+  instructions:
+    'Inspect the approved criteria, scope, changed source and recorded validation independently. Report concrete blockers with reproducible evidence or NEEDS_EVIDENCE for missing checks. Preserve source. Optional suggestions are warnings. Delivery follows the approved run policy; this report is evidence, not authorization.',
+  council: {
+    reviewers: [
+      {
+        id: 'correctness',
+        name: 'Astra review',
+        focus:
+          'Independently inspect all approved criteria, source changes, recorded tests, edge cases and scope. Report only concrete in-scope defects; optional suggestions are warnings.',
+        provider: 'codex',
+        model: 'gpt-6-astra',
+        effort: 'high',
+      },
+    ],
+    secondOpinion: {
+      id: 'second-opinion',
+      name: 'Fable second opinion',
+      focus:
+        'Independently assess the approved criteria and disputed outcome. Seek reproducible counterexamples, preserve scope and separate optional suggestions from blockers.',
+      provider: 'claude',
+      model: 'claude-fable-5-1',
+      effort: 'high',
+    },
+  },
+};
 initialWorkflows.unshift(singleReviewWorkflow);

@@ -14,7 +14,12 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "test:ui": "playwright test",
-    "test:jev-ui": "npm run build && node scripts/test-jev-ui.mjs"
+    "test:jev-ui": "npm run build && node scripts/test-jev-ui.mjs",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix --max-warnings=0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "@fastify/static": "10.1.4",
@@ -26,12 +31,18 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@playwright/test": "1.63.0",
     "@types/node": "24.13.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "eslint": "10.11.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "prettier": "3.9.8",
     "tsx": "4.23.13",
     "typescript": "5.9.3",
+    "typescript-eslint": "8.70.1",
     "vite": "8.3.0"
   }
 }

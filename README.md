@@ -72,26 +72,80 @@ CLI processes use argument arrays without a shell, a ten-minute default timeout,
 
 ## Development and verification
 
-Requires Node 24 and npm. From this directory:
+Requires Node 24 and npm. Install the pinned toolchain from the lockfile:
 
 ```sh
-npm ci
+npm ci --include=dev
+```
+
+Prettier is the single formatting authority and ESLint enforces the type-aware
+`strictTypeChecked` preset with `--max-warnings=0`. The maintained scope is
+`src/**`, `tests/**`, the TypeScript project files and the supported scripts in
+`scripts/`; generated output, dependencies, workspaces, artifacts, credentials
+and historical research paths are excluded.
+
+```sh
+npm run lint          # ESLint, zero warnings allowed
+npm run lint:fix      # ESLint with autofixes
+npm run format        # write Prettier formatting
+npm run format:check  # verify formatting without writing
+npm run check         # format:check -> lint -> typecheck -> test -> build
 npm run typecheck
 npm test
 npm run build
 npm start
 ```
 
+Run `npm run check` before delivery; the TypeScript strict flag stays enabled.
+Top-level `node:test` registrations in `tests/*.test.ts` use an explicit
+`void test(...)` because the runner owns their lifecycle. Nested `t.test(...)`
+subtests and every other promise must be awaited.
+
 For hot reload run `npm run dev` and `npm run dev:web` in separate terminals; Vite uses port 5173 and proxies the API to 4317. Stop the Compose service first if using the same API port.
 
-Browser end-to-end tests target the running Compose service:
+Editor settings in `.vscode/` select Prettier as the formatter and run ESLint
+fixes on save. Format-on-save is optional: set `"editor.formatOnSave": true` if
+you prefer it. `.editorconfig` and `.gitattributes` keep LF endings on every
+checkout, including Windows with `core.autocrlf=true`.
+
+To validate a change with Docker, build and run an isolated stack that never
+replaces the running platform:
+
+```sh
+docker compose -p agentloom-validate -f compose.validation.yaml up -d --build --wait
+docker compose -p agentloom-validate -f compose.validation.yaml ps
+curl http://127.0.0.1:4318/api/health
+docker compose -p agentloom-validate -f compose.validation.yaml down -v
+```
+
+The standalone validation configuration binds port 4318, explicitly clears all
+provider keys, and uses only project-scoped disposable volumes. It mounts neither
+host projects nor the Docker socket and does not reuse production credentials or
+data. Use a unique project name if another validation stack exists; port 4318 must
+be free. The final command removes only that validation project's volumes. Open
+http://localhost:4318 and use demo mode for manual smoke checks.
+
+Browser tests currently require a separate disposable development server. For
+the model-picker and workflow-archive specs, which start their own temporary
+servers, use this explicit target (PowerShell):
 
 ```sh
 npx playwright install chromium
-npm run test:ui
+$env:E2E_BASE_URL = 'http://127.0.0.1:4318'
+npm run test:ui -- tests/ui/model-picker.spec.ts tests/ui/workflow-archive.spec.ts
+Remove-Item Env:E2E_BASE_URL
 ```
 
-`E2E_BASE_URL` overrides the target URL. These tests create clearly named demo runs and edit a workflow description. The recovery browser test also creates a temporary project in `E2E_WORKSPACE_ROOT` (default `workspaces`), which must match the server's mounted workspace. Run them on a development instance. `node scripts/live-smoke.mjs` additionally creates three real provider tasks, including a small file write by Flash, and leaves their results for review; it requires authentication and incurs normal usage. An exit-zero CLI or waiting approval alone does not establish task correctness: inspect its output and files.
+Do not run the full browser suite against production. Shared-server specs create
+demo runs and edit workflows; the recovery spec also needs `E2E_WORKSPACE_ROOT`
+to be the same directory visible to both the test process and its disposable
+server. The standalone validation stack deliberately has no host workspace mount,
+so it is not a target for that recovery spec. The next test-infrastructure
+milestone replaces this manual setup with a self-starting isolated runner.
+`node scripts/live-smoke.mjs` creates three real provider tasks, including a small
+file write by Flash, and leaves their results for review; it requires
+authentication and incurs normal usage. An exit-zero CLI or waiting approval
+alone does not establish task correctness: inspect its output and files.
 
 `node scripts/start-pilot.mjs` starts the four-stage live slug-utility pilot and leaves each handoff for manual review. `node scripts/check-restart.mjs <waiting-run-id>` tests restart recovery and approval persistence by restarting the entire Compose service; use only when other work may safely be interrupted.
 
@@ -163,7 +217,6 @@ The URL preserves the selected run, historical step, detail tab, open file, acti
 
 On a blocked review or a review waiting for approval, **Send to implementer** returns the findings to the nearest completed writable step. It reuses the run workspace, repeats the intervening validation/review steps, preserves existing approval gates, and always requires approval of the fresh review. Earlier outputs remain expandable under **Previous attempt** and survive refresh and restart. This is an explicit handoff, not an automatic repair loop. The implementer must stay within approved scope and report BLOCKED when a decision is needed. Read-only workflows without a prior implementation do not offer this action. **Request revision** still reruns the current step to clarify or reconsider its output.
 
-
 ### Shell and Docker access
 
 Agents have full shell execution inside the Linux runner: Claude exposes Bash with permission checks bypassed, Codex uses danger-full-access with no approval prompts, and OpenCode allows Bash and external directory access. Workflow access labels describe source-editing responsibilities, not a shell sandbox. Planning and review must preserve source; installing dependencies and generating validation artifacts are allowed. The current user-authorized execution policy also applies to saved runs and supersedes older shell/install prohibitions in their prompts. Scope decisions and workflow approvals still belong to the user.
@@ -174,11 +227,9 @@ The runner includes Docker CLI and Compose and connects to Docker Desktop throug
 
 Plan, design, implementation and review each have a chat composer. Enter sends; Shift+Enter inserts a newline. Messages are saved with the step, and drafts survive refresh in the same browser tab. You can draft during execution and send when the agent stops. Follow-up replies always wait for approval. Sending to an earlier completed step reopens it and invalidates downstream results and approvals; prior downstream conversations and outputs remain in attempt history. Steps that have not started cannot accept messages yet. Model, effort and execution access are displayed in the composer.
 
-
 ### Agent time limits
 
-`CLI_TIMEOUT_MS` controls the total runtime per agent turn (default `3600000`, one hour; maximum 24 hours). `CLI_IDLE_TIMEOUT_MS` separately detects a provider that produces no output while no tool is running (default `600000`, ten minutes; `0` disables idle detection). Output resets the idle timer. Reported running tools suspend it, so quiet builds can continue up to the total runtime limit. Set these values in `.env` and recreate the Compose service to apply them. Failed runs require an explicit retry; workspace changes remain available.
-
+`CLI_TIMEOUT_MS` controls the total runtime per agent turn (default `3600000`, one hour; maximum 24 hours). `CLI_IDLE_TIMEOUT_MS` separately detects a provider that produces no output while no tool is running (default `600000`, ten minutes; `0` disables idle detection). Output resets the idle timer. Reported running tools suspend it, so quiet builds can continue up to the total runtime limit. `MAX_OUTPUT_BYTES` caps the captured bytes per agent process: both Compose and the server default to `2097152` (2 MiB); keep it finite. Larger tasks can opt into a higher cap such as `8388608` (8 MiB). Set these values in `.env` and recreate the Compose service to apply them. Failed runs require an explicit retry; workspace changes remain available.
 
 ### Jev review advice
 
@@ -187,7 +238,6 @@ When a live review finishes, Jev uses the configured TypeSafe key to classify th
 For environment or requirement issues, **Draft follow-up** prepares an editable step-chat message without sending it. Code-fix advice points to the existing explicit **Send to implementer** handoff. Older reviews can be classified with **Classify with Jev**. Late responses are ignored if the attempt or output has changed.
 
 When Jev is uncertain (classification confidence below 60%, or an unclear classification), approval requires explicitly checking the acknowledgment beside the approval button. The server requires an acknowledgment tied to that assessment; stale acknowledgments are rejected. Reclassification or refresh clears the checkbox. Approval records the acknowledgment in Activity. Approval also waits for an in-progress assessment to finish. Classification confidence does not measure code correctness.
-
 
 ### Git worktrees and draft pull requests
 
@@ -205,7 +255,6 @@ After every workflow step is approved, expand **Branch / Diff and draft PR**, in
 
 Direct-folder and isolated-copy runs cannot publish through this action. A GitHub remote and authentication are only required for publishing, not for local worktree runs.
 
-
 ### Approved Task to Verified Delivery
 
 Select this workflow for: approved task -> cheap implementation -> recorded validation and Jev signals -> strong review -> human approval. Codex GPT-6-Astra handles planning and review; OpenCode uses deepseek/deepseek-flash with max effort for implementation. Models remain editable under Workflows.
@@ -217,7 +266,6 @@ Each attempt records exit codes, bounded output, start/end times, source fingerp
 Failed or timed-out commands and source changes during validation prevent final approval, even if the reviewer claims success. The approval API rechecks the source fingerprint. Review blockers, including Markdown-formatted BLOCKED verdicts, also prevent approval. Send findings to the implementer to repair, rerun validation and obtain a fresh review. Prior evidence remains in attempt history. Re-running validation through its chat repeats the same approved commands; changing the command contract requires a new run.
 
 Fingerprints cover up to 20,000 files / 100 MB and reject source symlinks. Git metadata, dependencies, standard build/cache/coverage/report directories, artifacts, and local .env secrets are excluded. Fingerprints establish freshness within that scope; test coverage and correctness still require review. Output is limited to the last 64,000 characters per command and is marked when truncated.
-
 
 ## Outcome council (opt-in)
 

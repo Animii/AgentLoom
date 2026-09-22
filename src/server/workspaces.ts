@@ -15,7 +15,13 @@ const MAX_COPY_TOTAL_BYTES = 100 * 1024 * 1024;
 const MAX_LIST_ENTRIES = 500;
 const MAX_READ_BYTES = 1024 * 1024;
 
-const COPY_EXCLUDED_NAMES = new Set(['.git', 'node_modules', '.env', '.auth', '.data']);
+const COPY_EXCLUDED_NAMES = new Set([
+  '.git',
+  'node_modules',
+  '.env',
+  '.auth',
+  '.data',
+]);
 const LIST_SKIPPED_DIRECTORY_NAMES = new Set(['.git', 'node_modules']);
 
 interface CopyBudget {
@@ -62,10 +68,18 @@ function joinLabel(prefix: string, name: string): string {
 
 function isWithin(parent: string, candidate: string): boolean {
   const relative = path.relative(parent, candidate);
-  return relative.length > 0 && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+  return (
+    relative.length > 0 &&
+    relative !== '..' &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
+  );
 }
 
-async function ensureRealDirectory(directory: string, label: string): Promise<void> {
+async function ensureRealDirectory(
+  directory: string,
+  label: string,
+): Promise<void> {
   const existing = await lstatOrNull(directory);
   if (existing) {
     if (existing.isSymbolicLink()) {
@@ -101,13 +115,20 @@ async function ensureRoot(root: string): Promise<void> {
   if (!rootStat.isDirectory()) {
     throw new Error('Workspace root is not a directory');
   }
-  await ensureRealDirectory(path.join(root, PROJECTS_DIR_NAME), 'projects directory');
+  await ensureRealDirectory(
+    path.join(root, PROJECTS_DIR_NAME),
+    'projects directory',
+  );
   await ensureRealDirectory(path.join(root, RUNS_DIR_NAME), 'runs directory');
 }
 
-async function resolveProjectDirectory(root: string, project: string): Promise<string> {
+async function resolveProjectDirectory(
+  root: string,
+  project: string,
+): Promise<string> {
   const projectDirectory = path.join(root, PROJECTS_DIR_NAME, project);
-  if (await lstatOrNull(path.join(projectDirectory, IMPORT_MARKER))) throw new Error('Project is still importing.');
+  if (await lstatOrNull(path.join(projectDirectory, IMPORT_MARKER)))
+    throw new Error('Project is still importing.');
   const projectStat = await lstatOrNull(projectDirectory);
   if (!projectStat) {
     throw new Error('Project not found');
@@ -121,7 +142,10 @@ async function resolveProjectDirectory(root: string, project: string): Promise<s
   return projectDirectory;
 }
 
-async function resolveRunDirectory(root: string, runId: string): Promise<string> {
+async function resolveRunDirectory(
+  root: string,
+  runId: string,
+): Promise<string> {
   const runsDirectory = path.join(root, RUNS_DIR_NAME);
   const runsStat = await lstatOrNull(runsDirectory);
   if (!runsStat || runsStat.isSymbolicLink() || !runsStat.isDirectory()) {
@@ -143,7 +167,9 @@ async function resolveRunDirectory(root: string, runId: string): Promise<string>
 
 function enforceCopyBudget(budget: CopyBudget): void {
   if (budget.entries > MAX_COPY_ENTRIES) {
-    throw new Error(`Workspace copy exceeds ${MAX_COPY_ENTRIES} entries`);
+    throw new Error(
+      `Workspace copy exceeds ${String(MAX_COPY_ENTRIES)} entries`,
+    );
   }
 }
 
@@ -232,7 +258,11 @@ export async function listProjects(root: string): Promise<ProjectInfo[]> {
   return projects;
 }
 
-export async function prepareWorkspace(root: string, project: string, runId: string): Promise<string> {
+export async function prepareWorkspace(
+  root: string,
+  project: string,
+  runId: string,
+): Promise<string> {
   assertValidId('project', project);
   assertValidId('run', runId);
   await ensureRoot(root);
@@ -240,7 +270,11 @@ export async function prepareWorkspace(root: string, project: string, runId: str
   return prepareWorkspaceFrom(root, sourceDirectory, runId);
 }
 
-export async function prepareWorkspaceFrom(root: string, sourceDirectory: string, runId: string): Promise<string> {
+export async function prepareWorkspaceFrom(
+  root: string,
+  sourceDirectory: string,
+  runId: string,
+): Promise<string> {
   assertValidId('run', runId);
   await ensureRoot(root);
   const runsDirectory = path.join(root, RUNS_DIR_NAME);
@@ -268,7 +302,10 @@ async function collectRunFiles(
   entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   for (const entry of entries) {
     if (collected.length >= MAX_LIST_ENTRIES) return;
-    if (LIST_SKIPPED_DIRECTORY_NAMES.has(entry.name.toLowerCase()) || isExcludedFromCopy(entry.name)) {
+    if (
+      LIST_SKIPPED_DIRECTORY_NAMES.has(entry.name.toLowerCase()) ||
+      isExcludedFromCopy(entry.name)
+    ) {
       continue;
     }
     const entryPath = path.join(directory, entry.name);
@@ -277,27 +314,41 @@ async function collectRunFiles(
       continue;
     }
     if (entryStat.isDirectory()) {
-      await collectRunFiles(entryPath, joinLabel(prefix, entry.name), collected);
+      await collectRunFiles(
+        entryPath,
+        joinLabel(prefix, entry.name),
+        collected,
+      );
       continue;
     }
     if (!entryStat.isFile()) {
       continue;
     }
     if (collected.length >= MAX_LIST_ENTRIES) {
-      throw new Error(`Run workspace listing exceeds ${MAX_LIST_ENTRIES} entries`);
+      throw new Error(
+        `Run workspace listing exceeds ${String(MAX_LIST_ENTRIES)} entries`,
+      );
     }
-    collected.push({ path: joinLabel(prefix, entry.name), bytes: entryStat.size });
+    collected.push({
+      path: joinLabel(prefix, entry.name),
+      bytes: entryStat.size,
+    });
   }
 }
 
-export async function listRunFiles(root: string, runId: string): Promise<{ path: string; bytes: number }[]> {
+export async function listRunFiles(
+  root: string,
+  runId: string,
+): Promise<{ path: string; bytes: number }[]> {
   assertValidId('run', runId);
   await ensureRoot(root);
   const runDirectory = await resolveRunDirectory(root, runId);
   return listDirectoryFiles(runDirectory);
 }
 
-export async function listDirectoryFiles(runDirectory: string): Promise<{ path: string; bytes: number }[]> {
+export async function listDirectoryFiles(
+  runDirectory: string,
+): Promise<{ path: string; bytes: number }[]> {
   const collected: { path: string; bytes: number }[] = [];
   await collectRunFiles(runDirectory, '', collected);
   collected.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
@@ -305,10 +356,18 @@ export async function listDirectoryFiles(runDirectory: string): Promise<{ path: 
 }
 
 function parseRelativePath(relative: string): string[] {
-  if (typeof relative !== 'string' || relative.length === 0 || relative.includes('\0')) {
+  if (
+    typeof relative !== 'string' ||
+    relative.length === 0 ||
+    relative.includes('\0')
+  ) {
     throw new Error('Invalid relative file path');
   }
-  if (relative.includes('\\') || /^[a-zA-Z]:/.test(relative) || path.isAbsolute(relative)) {
+  if (
+    relative.includes('\\') ||
+    /^[a-zA-Z]:/.test(relative) ||
+    path.isAbsolute(relative)
+  ) {
     throw new Error('Windows or absolute file paths are not allowed');
   }
   if (relative.startsWith('/')) {
@@ -316,23 +375,36 @@ function parseRelativePath(relative: string): string[] {
   }
   const segments = relative.split('/');
   for (const segment of segments) {
-    if (segment.length === 0 || segment === '.' || segment === '..' || segment.includes(':')) {
+    if (
+      segment.length === 0 ||
+      segment === '.' ||
+      segment === '..' ||
+      segment.includes(':')
+    ) {
       throw new Error('Invalid relative file path');
     }
   }
   return segments;
 }
 
-export async function readRunFile(root: string, runId: string, relative: string): Promise<string> {
+export async function readRunFile(
+  root: string,
+  runId: string,
+  relative: string,
+): Promise<string> {
   assertValidId('run', runId);
   await ensureRoot(root);
   const runDirectory = await resolveRunDirectory(root, runId);
   return readDirectoryFile(runDirectory, relative);
 }
 
-export async function readDirectoryFile(runDirectory: string, relative: string): Promise<string> {
+export async function readDirectoryFile(
+  runDirectory: string,
+  relative: string,
+): Promise<string> {
   const segments = parseRelativePath(relative);
-  if (segments.some(isExcludedFromCopy)) throw new Error('This file is excluded from project access.');
+  if (segments.some(isExcludedFromCopy))
+    throw new Error('This file is excluded from project access.');
   const resolved = path.resolve(runDirectory, ...segments);
   if (!isWithin(runDirectory, resolved)) {
     throw new Error('Resolved path escapes the run workspace');
@@ -358,7 +430,10 @@ export async function readDirectoryFile(runDirectory: string, relative: string):
   if (fileStat.size > MAX_READ_BYTES) {
     throw new Error('Run file exceeds 1 MB read limit');
   }
-  const [realRunDirectory, realFile] = await Promise.all([fs.realpath(runDirectory), fs.realpath(resolved)]);
+  const [realRunDirectory, realFile] = await Promise.all([
+    fs.realpath(runDirectory),
+    fs.realpath(resolved),
+  ]);
   if (!isWithin(realRunDirectory, realFile)) {
     throw new Error('Resolved path escapes the run workspace');
   }
