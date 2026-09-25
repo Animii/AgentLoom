@@ -221,14 +221,19 @@ function stepSummary(step: StepRun, format: Format) {
   };
 }
 
-function runRow(run: Run, projectNames: Map<string, string>) {
+interface ProjectName {
+  name: string;
+  label: string;
+}
+
+function runRow(run: Run, projectNames: Map<string, ProjectName>) {
   const step = run.steps.at(run.currentStep);
   return {
     id: run.id,
     title: run.title,
     status: run.status,
     workflow: run.workflowName,
-    project: projectNames.get(run.project) ?? run.project,
+    project: projectNames.get(run.project)?.label ?? run.project,
     current_step: step ? `${step.definition.name} (${step.status})` : null,
     waiting_for: waitingFor(run),
     pr_url: run.git?.prUrl,
@@ -431,7 +436,16 @@ function registerTools(
 
   async function projectNames() {
     const projects = await api<ManagedProject[]>('GET', '/api/projects');
-    return new Map(projects.map((p) => [p.id, p.name]));
+    // Labels mark archived or disconnected projects, which cannot start new runs.
+    return new Map<string, ProjectName>(
+      projects.map((p) => [
+        p.id,
+        {
+          name: p.name,
+          label: p.status === 'active' ? p.name : `${p.name} (${p.status})`,
+        },
+      ]),
+    );
   }
   async function summarize(run: Run) {
     const names = await projectNames();
@@ -443,7 +457,7 @@ function registerTools(
       run,
       events.slice(-5),
       'concise',
-      names.get(run.project) ?? run.project,
+      names.get(run.project)?.label ?? run.project,
     );
   }
 
@@ -728,7 +742,7 @@ function registerTools(
           (r) =>
             !project ||
             r.project === project ||
-            names.get(r.project)?.toLowerCase() === project.toLowerCase(),
+            names.get(r.project)?.name.toLowerCase() === project.toLowerCase(),
         )
         .filter((r) => !workflow_id || r.workflowId === workflow_id)
         .filter(
@@ -786,7 +800,7 @@ function registerTools(
         run,
         events.slice(-LIMITS[response_format].events),
         response_format,
-        names.get(run.project) ?? run.project,
+        names.get(run.project)?.label ?? run.project,
       );
     },
   );
