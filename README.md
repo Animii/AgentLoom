@@ -70,12 +70,12 @@ claude mcp add --transport http agentloom http://127.0.0.1:4317/mcp
 
 Tools are prefixed `agentloom_`:
 
-| Area | Tools |
-|---|---|
-| Workflows | `list_workflows`, `save_workflow`, `list_providers` |
-| Projects | `list_projects`, `browse_project_folders`, `connect_project`, `update_project` |
-| Runs | `search_runs`, `get_run`, `start_run`, `respond_to_run` (approve, revise, reply, rework, revalidate, second opinion, retry, automation pause/resume, reassess), `cancel_run` |
-| Results | `list_run_files`, `read_run_file`, `get_run_diff`, `publish_pull_request` |
+| Area      | Tools                                                                                                                                                                        |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Workflows | `list_workflows`, `save_workflow`, `list_providers`                                                                                                                          |
+| Projects  | `list_projects`, `browse_project_folders`, `connect_project`, `update_project`                                                                                               |
+| Runs      | `search_runs`, `get_run`, `start_run`, `respond_to_run` (approve, revise, reply, rework, revalidate, second opinion, retry, automation pause/resume, reassess), `cancel_run` |
+| Results   | `list_run_files`, `read_run_file`, `get_run_diff`, `publish_pull_request`                                                                                                    |
 
 Each tool calls the same HTTP API as the web UI in-process, so validation, approval rules and state checks are identical. A manual action on an automated run pauses its automation, as in the UI. Publishing requires the `preview_token` from `get_run_diff`, so the pull request contains exactly the previewed files. Responses are concise by default and bounded (outputs, diffs, file reads and event lists are truncated with guidance on narrowing). Tools carry read-only/destructive annotations so clients can ask before cancelling runs, overwriting workflows or disconnecting projects. Jev settings and browser folder imports are not exposed.
 
