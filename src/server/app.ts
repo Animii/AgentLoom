@@ -31,6 +31,7 @@ import { registerRunStream } from './run-stream.js';
 import { registerProjectImports } from './project-import.js';
 import { Projects, registerProjects } from './projects.js';
 import { registerJev } from './jev.js';
+import { registerMcp } from './mcp.js';
 import { createExecutor, getProviders } from './providers.js';
 import { Store } from './store.js';
 import {
@@ -272,7 +273,7 @@ const stepDefinitionSchema = z
     }
   });
 
-const workflowSchema = z
+export const workflowSchema = z
   .strictObject({
     allowSplit: z.boolean().optional(),
     archived: z.boolean().optional(),
@@ -850,6 +851,7 @@ export async function createApp(
   );
 
   registerProjects(app, projects);
+  registerMcp(app, workflowSchema, VERSION);
 
   let providersCache: { expiresAt: number; value: ProviderInfo[] } | null =
     null;
