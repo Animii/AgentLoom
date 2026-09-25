@@ -16,6 +16,7 @@ interface Rpc {
 interface RunView {
   id: string;
   status: Run['status'];
+  project: string;
   next_actions: string[];
   steps: { output?: string; attempt: number }[];
   events: unknown[];
@@ -317,6 +318,19 @@ void test('external MCP endpoint exposes run control tools over the local API bo
     );
     assert.equal(finished.data.total, 0);
     assert.match(finished.data.hint ?? '', /status/);
+
+    await f.request('/api/projects/sample', {
+      method: 'PATCH',
+      payload: { status: 'archived' },
+    });
+    const archived = await call<{ runs: { project: string }[] }>(
+      'agentloom_search_runs',
+      { status: ['completed'], project: 'sample' },
+      { runs: [] },
+    );
+    assert.equal(archived.data.runs[0]?.project, 'sample (archived)');
+    const archivedView = await runView(runId);
+    assert.equal(archivedView.data?.project, 'sample (archived)');
   });
 
   await t.test(
