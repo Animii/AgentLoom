@@ -18,6 +18,8 @@ package-lock.json
 docs/*
 !docs/TESTING.md
 !docs/ARCHITECTURE.md
+!docs/DEVELOPMENT.md
+!docs/USER_GUIDE.md
 
 # Pilot scripts and prohibited untracked research tooling
 scripts/pilots/

@@ -1,6 +1,6 @@
 # Outcome council proposal
 
-Status: opt-in first version implemented in the council-delivery workflow. See README for operation and limitations.
+Status: opt-in first version implemented in the council-delivery workflow. See the [user guide](USER_GUIDE.md#outcome-council-opt-in) for operation and limitations.
 
 Keep the approved plan, recorded test results and source fingerprint as the common evidence bundle. A council extends the strong-review stage after implementation and validation. It never replaces executable checks or the final user decision.
 

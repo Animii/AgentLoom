@@ -114,4 +114,4 @@ The harness closes its listener and deletes its workspace after success, asserti
 docker compose -p agentloom-tests -f compose.tests.yaml down
 ```
 
-CI runs `npm run check` and the full isolated browser suite without credentials. Failed browser runs retain traces, screenshots, and the HTML report. The Compose application smoke test is separate; follow the isolated `compose.validation.yaml` recipe in the README.
+CI runs `npm run check` and the full isolated browser suite without credentials. Failed browser runs retain traces, screenshots, and the HTML report. The Compose application smoke test is separate; follow the isolated `compose.validation.yaml` recipe in [Development](DEVELOPMENT.md#validate-the-compose-application).
