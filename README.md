@@ -1,30 +1,228 @@
 ﻿# AgentLoom
 
-A local workflow board for Claude Code, Codex and OpenCode. Define roles and steps, start tasks, inspect output and files, and approve or revise each handoff. Docker Compose runs the API, React UI, SQLite store and CLI adapters on your machine.
+[![Validation](https://github.com/Animii/AgentLoom/actions/workflows/validation.yml/badge.svg)](https://github.com/Animii/AgentLoom/actions/workflows/validation.yml)
+![Node 24](https://img.shields.io/badge/node-24-339933?logo=node.js&logoColor=white)
+![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
+![MCP server](https://img.shields.io/badge/MCP-Streamable%20HTTP-555)
 
-## Start
+**Run Claude Code, Codex and OpenCode as one reviewable workflow: multi-step agent pipelines with human approval gates, recorded validation and draft-PR delivery, on your own machine.**
 
-Requires Docker Desktop (Linux containers).
+Coding agents are good at a single task; the handoffs are where things slip. A planner invents a missing requirement, an implementer reports that tests pass, a reviewer's blocker gets lost between sessions. AgentLoom makes every handoff explicit: each step runs a real agent CLI in a controlled workspace, its output and events are persisted, and the next agent starts only after you approve, revise or stop it.
+
+![A crate in AgentLoom: the Design step of a four-step workflow is waiting for approval, followed by implementation, review, triage and final approval](docs/images/crate-journey.png)
+
+<sub>Demo mode, captured from the real UI. Each step shows its role and agent; the run is paused at the Design gate.</sub>
+
+**At a glance:** TypeScript end to end (Node 24, Fastify, React 19) · 3 agent CLIs · 7 built-in workflows · 16 MCP tools · SQLite via `node:sqlite` · 196 backend tests + 31 Playwright browser tests in CI.
+
+## Contents
+
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [How it works](#how-it-works)
+- [Quickstart](#quickstart)
+- [Drive AgentLoom from an MCP client](#drive-agentloom-from-an-mcp-client)
+- [Configuration](#configuration)
+- [Project structure](#project-structure)
+- [Tech stack](#tech-stack)
+- [Testing and CI](#testing-and-ci)
+- [Design decisions and trade-offs](#design-decisions-and-trade-offs)
+- [Limitations](#limitations)
+- [Documentation](#documentation)
+
+## Features
+
+- **Multi-agent workflows.** Define steps with a role, provider (Claude Code, Codex or OpenCode), model, effort, instructions and access level. Seven templates ship, from a two-step read-only review to plan → design → implement → review.
+- **Approval gates.** A gated step pauses _after_ it produces output and _before_ the next agent starts. Approve, request a revision with feedback, or cancel. Failures wait for an explicit retry, nothing is approved automatically unless you opt a run into the PR machine, and an output that starts with `BLOCKED` can never be approved.
+- **Planning conversations with an `ask_user` tool.** Planners get a per-turn MCP server with `ask_user` plus read-only `list_project_files`, `read_project_file` and `search_project`. Questions appear as a structured panel; the plan only moves on when you approve it.
+- **Three workspace modes.** Work directly in a folder, in an isolated copy, or in a **Git worktree per run** on branch `agentloom/<run-id>`, created from a managed bare repository so your checkout is untouched.
+- **Draft PRs of exactly what you approved.** Final approval records the Git tree; publishing re-checks it, pushes only the run branch and opens a draft with `gh`. It never force-pushes or merges.
+- **Recorded validation.** Validation steps run configured commands themselves (no shell), record exit codes, bounded output and source fingerprints, and block final approval if checks fail or the source changed afterwards.
+- **MCP server for other agents.** `/mcp` exposes 16 `agentloom_*` tools so Claude Code, Codex or another MCP client can start runs, answer gates, read diffs and publish PRs through the same rules as the UI.
+- **Live, restart-safe runs.** Output streams over server-sent events. On restart, in-flight runs become `interrupted` and wait for an explicit retry; pending approvals and planner questions survive.
+- **Demo mode.** Simulated agents walk the full flow, including planner questions and approval gates, without credentials, CLIs or file changes.
+- **Opt-in delivery modes.** An outcome council (three independent reviewers plus a chair), a PR machine that routes up to two repairs through an advisory evaluator, and crates that split approved plans into child worktrees. See the [user guide](docs/USER_GUIDE.md).
+
+## Screenshots
+
+| Runs grouped by what needs you                                                                       | An approval gate                                                                                                              |
+| ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| ![Run overview with Needs attention, In progress and Finished groups](docs/images/runs-overview.png) | ![Run detail paused at the Design step with Approve and continue, Request revision and Cancel](docs/images/approval-gate.png) |
+| **Planner questions via the `ask_user` MCP tool**                                                    | **Per-step provider, model, effort, access and gate**                                                                         |
+| ![Planning step waiting for answers to structured questions](docs/images/planner-questions.png)      | ![Workflow editor with the Design step expanded](docs/images/workflow-editor.png)                                             |
+
+All screenshots are from demo mode, so outputs are placeholders and no provider was called.
+
+## How it works
+
+### Architecture
+
+One Node process serves the React UI, the JSON API, server-sent events and the MCP endpoint, bound to `127.0.0.1`. The engine owns the run queue and gates; everything with side effects (SQLite, agent processes, workspaces, Git, validation, the evaluator) sits behind small application-owned ports that tests replace with fakes.
+
+```mermaid
+flowchart TB
+  UI["Web UI<br/>React 19 · Vite"]
+  MCPC["MCP client<br/>Claude Code · Codex · Claude Desktop"]
+
+  subgraph Server["AgentLoom server · Node 24 · Fastify · 127.0.0.1:4317"]
+    MCP["/mcp endpoint<br/>Streamable HTTP"]
+    API["HTTP API<br/>REST · SSE · Host/Origin checks"]
+    Engine["Workflow engine<br/>queue · approval gates · retries"]
+    Auto["Automation and review advice<br/>PR machine · Jev classification"]
+    Policy["Pure shared policy<br/>approval · routing · review rules"]
+    Store[("SQLite via node:sqlite<br/>workflows · runs · events")]
+    Runner["Provider runner<br/>argv spawn · timeouts · output cap"]
+    Validation["Recorded validation<br/>exact commands · source fingerprints"]
+    AskMCP["Per-turn planning MCP<br/>ask_user · read-only file tools"]
+  end
+
+  CLIs["Agent CLIs<br/>claude · codex · opencode"]
+  WS["Run workspace<br/>direct folder · isolated copy · Git worktree"]
+  GH["GitHub<br/>draft PR via gh"]
+  Jev["Jev evaluator<br/>optional · advisory"]
+
+  UI -- "JSON + SSE" --> API
+  MCPC -- "JSON-RPC" --> MCP
+  MCP -- "in-process calls" --> API
+  API --> Engine
+  Auto --> Engine
+  Engine --> Policy
+  Engine <--> Store
+  Engine --> Runner
+  Engine --> Validation
+  Runner -- "spawn, no shell" --> CLIs
+  CLIs -. "planning turns" .-> AskMCP
+  CLIs -- "read / edit" --> WS
+  AskMCP -. "read-only" .-> WS
+  Validation -- "e.g. npm run check" --> WS
+  Auto -. "classify / route" .-> Jev
+  API -- "approved tree only" --> GH
+```
+
+ESLint enforces the boundaries: the client cannot import server code, shared policy cannot import adapters or Node I/O, and the engine cannot import concrete adapters. See [Architecture](docs/ARCHITECTURE.md).
+
+### Run lifecycle
+
+States and transitions come from `RunStatus` in [`src/shared/types.ts`](src/shared/types.ts) and the engine in [`src/server/engine.ts`](src/server/engine.ts).
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  [*] --> queued : start run
+  queued --> running : picked up (max 2 at once)
+  running --> waiting_approval : step done, gate on
+  running --> waiting_input : planner asks
+  running --> blocked : reports BLOCKED
+  running --> failed : exit ≠ 0, timeout
+  running --> interrupted : server restart
+  running --> completed : last step, no gate
+  waiting_approval --> queued : approve / revise
+  waiting_approval --> completed : approve last step
+  waiting_input --> queued : user replies
+  blocked --> queued : revise / rework
+  failed --> queued : retry
+  interrupted --> queued : retry
+  completed --> [*]
+  cancelled --> [*]
+
+  note right of running
+    A step without a gate completes and
+    the next step starts immediately.
+  end note
+  note left of cancelled
+    Cancel works from any state
+    except completed and failed.
+  end note
+```
+
+The server re-checks every gate on approval. It refuses while:
+
+| Guard                    | Why                                                                                            |
+| ------------------------ | ---------------------------------------------------------------------------------------------- |
+| Output reports `BLOCKED` | Agents are told to stop instead of inventing missing requirements; that stop must be resolved. |
+| Planner questions open   | A plan cannot be approved while the planner is still waiting for answers.                      |
+| Validation stale/failing | Final approval needs passing recorded checks on an unchanged source fingerprint.               |
+| Uncertain Jev assessment | Low-confidence review advice must be acknowledged explicitly; stale acknowledgments fail.      |
+| Run changed meanwhile    | Final approval compares a snapshot of the run before and after computing the Git preview.      |
+
+### One live run, end to end
+
+A run of _Review, Build and Verify_ on a Git-worktree project, from the web UI or an MCP client:
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor U as You (web UI or MCP client)
+  participant API as Fastify API
+  participant E as Engine
+  participant DB as SQLite
+  participant W as Git worktree
+  participant CLI as Agent CLI
+  participant GH as GitHub
+
+  U->>API: POST /api/runs {workflowId, project, mode: live}
+  API->>E: create(): snapshot workflow steps
+  E->>DB: save run (queued)
+  API-->>U: 201 Created
+  U->>API: GET /api/runs/:id/stream (SSE)
+  E->>W: git worktree add -b agentloom/<run-id> <base commit>
+  loop Each workflow step
+    E->>CLI: spawn(binary, argv, shell: false, cwd: worktree)
+    CLI->>W: read / edit files within the step's access
+    CLI-->>E: JSON event stream (text, tool calls, cost)
+    E->>DB: persist output + events
+    API-->>U: full run snapshot over SSE
+    alt Approval gate on
+      E->>DB: status waiting_approval
+      U->>API: POST /api/runs/:id/approve (or /revise)
+      API->>E: approve(): re-check gate rules, queue next step
+    else Output reports BLOCKED
+      E->>DB: status blocked (revise, rework or revalidate)
+    end
+  end
+  Note over E,DB: Final approval re-checks validation and stores the approved Git tree
+  U->>API: GET /api/runs/:id/git (diff + preview token)
+  U->>API: POST /api/runs/:id/pull-request {token, title, body}
+  API->>W: commit previewed files (tree must equal approved tree)
+  API->>GH: push run branch · gh pr create --draft
+  GH-->>U: draft PR link (never merged or force-pushed)
+```
+
+Direct-folder and isolated-copy runs skip the Git steps; demo runs skip the agent CLIs entirely.
+
+## Quickstart
+
+### Docker Compose (recommended)
+
+The image bundles the server, the three agent CLIs (Claude Code, Codex, OpenCode), `git`, `gh` and the Docker CLI. Requires Docker with Linux containers.
 
 ```sh
+git clone https://github.com/Animii/AgentLoom.git
+cd AgentLoom
 docker compose up -d --build --wait
 ```
 
-Open **http://localhost:4317**. Choose **Try a demo** to exercise the complete workflow without provider credentials or charges. Live runs call your configured providers and may incur charges.
+Open **http://localhost:4317**. Compose publishes only on `127.0.0.1`. By default it also mounts the clone's parent directory read/write as the root for **Connect folder**; set `PROJECTS_FOLDER` in `.env` to narrow that.
 
-The three starter workflows are:
+### Node 24, without Docker
 
-- **Review, Build and Verify:** Codex planning, Claude design, Flash implementation, Codex review. Approval follows every step.
-- **Quick Review:** two read-only reviewers, automatically handed off.
-- **Fix and Verify:** Flash implementation followed by Codex verification, with approval gates.
+Demo mode needs no agent CLIs. For live runs, install `claude`, `codex` and/or `opencode` on your `PATH` (or point `CLAUDE_BIN`, `CODEX_BIN`, `OPENCODE_BIN` at them).
 
-The default implementer is `deepseek/deepseek-flash` at **max** effort. Its instructions prohibit product/scope decisions and require `BLOCKED` when requirements are missing. The designer uses `claude-fable-5-1`; Codex uses its CLI default model. Model availability depends on your provider account; change models in **Workflows**.
+```sh
+npm ci --include=dev
+npm run build
+npm start            # http://127.0.0.1:4317, data in ./.data and ./workspaces
+```
 
-Each step's **Model** field is a searchable list. Expanding a step loads that provider's catalog: Codex models come from the App Server `model/list` method, OpenCode models from `opencode models`, and Claude Code offers its `sonnet`, `opus` and `haiku` aliases. When discovery fails or is unavailable, the built-in suggestions (`gpt-5.6-sol` for Codex, `opencode/gpt-5.1-codex` for OpenCode) remain selectable, and you can always type a custom identifier, keep **CLI default**, or use **Refresh models**. Catalog membership does not guarantee account access.
+For hot reload, run `npm run dev` (API) and `npm run dev:web` (Vite on port 5173, proxying `/api`) in two terminals.
 
-## Connect providers
+### Try the demo
 
-The **Agents** page checks installed CLI versions. It deliberately does not equate installation with authentication. Log in inside the container:
+1. Choose **New run**, keep the auto-created **welcome** project, pick **Review, Build and Verify** and set **Mode** to **Demo**.
+2. The simulated planner asks two questions. Answer them, then **Approve plan and continue**.
+3. Each gated step stops at **Approve and continue / Request revision / Cancel**. Watch the run move between _Needs attention_, _In progress_ and _Finished_ on **Runs**.
+
+Live runs call your configured providers and may incur charges. To connect providers in Docker, log in inside the container (credentials persist in the `agent_home` volume) or set API keys in `.env`:
 
 ```sh
 docker compose exec platform claude auth login
@@ -32,287 +230,145 @@ docker compose exec platform codex login --device-auth
 docker compose exec platform opencode auth login
 ```
 
-Credentials persist in the `agent_home` Docker volume. Alternatively copy `.env.example` to `.env`, fill the provider keys you use, and recreate the service with `docker compose up -d`. Never commit `.env` or credential files. `OPENAI_API_KEY` is mapped to the Codex child process's `CODEX_API_KEY`. OpenCode can use its stored provider login or `DEEPSEEK_API_KEY`.
+The [user guide](docs/USER_GUIDE.md) covers projects, worktrees, draft PRs, planning conversations, validation, the council and the PR machine.
 
-Existing CLI credential files can be copied into their corresponding container locations with `docker compose cp`; use only your own credentials and keep file permissions private. The platform does not expose a credential-reading API.
+## Drive AgentLoom from an MCP client
 
-Provider calls send task context and relevant project content to those providers. Run history, files and credentials are stored locally.
+The server exposes a Streamable HTTP MCP endpoint at `http://127.0.0.1:4317/mcp`. Add it to Claude Code:
 
-## Jev settings and evaluations
-
-Open **Agents → Jev (TypeSafe)**. Paste your TypeSafe API key into **Jev API key**, then choose **Save API key**. The field clears after saving. **Test connection** sends a small sample to TypeSafe and verifies a real response; saving alone does not verify authentication. **Remove saved key** deletes the stored credential.
-
-The key is encrypted with AES-256-GCM under `/data/secrets` and persists in the Compose `data` volume. Its local encryption key is in the same volume, so this is not protection against someone who controls the host or that volume. The server returns configuration status only, never the saved key. Do not back up or share the secrets folder publicly. Optional `TYPESAFE_API_KEY` in `.env` is used when no saved key exists; removing a saved key does not erase this environment fallback. Jev credentials are not inherited by the CLI agents.
-
-Use **Evaluate with Jev** for a Choice, Score, or Noul probability question. The default model is `jev-latest`. Evaluations send the supplied text and question to TypeSafe and may incur usage. Results are advisory: this panel does not approve handoffs, edit files, or make workflow/product decisions. Jev is an API evaluator, not an additional coding CLI.
-
-The request/response integration follows the [TypeSafe API reference](https://docs.typesafe.ai/api). `npm run test:jev-ui` verifies key save/removal, persistence through a server restart, all three evaluation types, and mobile layout using a deterministic upstream fixture. A real account connection is verified by the **Test connection** button after you provide your key.
-
-## Working with projects and runs
-
-Open **Projects → Connect folder** to browse a real host folder and register it. Connected projects default to **Work directly in folder**. Choose **Use isolated copies** for a separate working copy per run. The Projects page shows paths, availability, mode and history, and supports renaming, archiving/restoring and disconnecting/reconnecting without deleting files. **Import a copy** remains available for browser uploads.
-
-Direct runs execute in the registered source folder, so implementation edits appear in your editor immediately. Planning remains read-only. Isolated runs copy source into `workspaces/runs/<run-id>/`; those changes must be copied or merged back manually. Each run records its folder and mode at creation. The **Files** tab of a direct run shows current folder contents, not a historical snapshot. `.git`, `node_modules`, common credential/config data folders and `.env` files are excluded from snapshots; `.env.example` is allowed. This is not a general secret scanner: keep confidential material out of projects supplied to agents.
-
-An approval gate pauses **after** a step produces output and before the next agent starts. **Request revision** reruns the same step with feedback and its previous output. **Approve and continue** accepts the current result. **Cancel** stops the owned process. Failures require **Retry step**; the service never silently retries or auto-approves. A leading `BLOCKED` response requires revision instead of approval.
-
-Workflow edits affect new runs only. Running tasks retain their original definition. Two runs may execute concurrently. After a service restart, active/queued tasks become **Interrupted** and require review and an explicit retry; pending approvals remain pending. A retry continues in the run's recorded workspace, so inspect partial changes first. Live direct runs reserve their folder across approval gates; overlapping live runs are rejected. Finish or cancel active runs before changing project access or archiving/disconnecting.
-
-Demo runs are explicitly labeled and do not execute CLIs or make file changes.
-
-## Control AgentLoom from an MCP client
-
-AgentLoom serves an MCP endpoint at `http://127.0.0.1:4317/mcp` (Streamable HTTP, protocol 2026-07-28 with stateless fallback for 2025-era clients). It lets Claude Code, Claude Desktop, Codex or another local MCP client start and steer runs on your behalf:
-
-```bash
+```sh
 claude mcp add --transport http agentloom http://127.0.0.1:4317/mcp
 ```
 
-Tools are prefixed `agentloom_`:
+or check it into a project as `.mcp.json`:
 
-| Area      | Tools                                                                                                                                                                        |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Workflows | `list_workflows`, `save_workflow`, `list_providers`                                                                                                                          |
-| Projects  | `list_projects`, `browse_project_folders`, `connect_project`, `update_project`                                                                                               |
-| Runs      | `search_runs`, `get_run`, `start_run`, `respond_to_run` (approve, revise, reply, rework, revalidate, second opinion, retry, automation pause/resume, reassess), `cancel_run` |
-| Results   | `list_run_files`, `read_run_file`, `get_run_diff`, `publish_pull_request`                                                                                                    |
+```json
+{
+  "mcpServers": {
+    "agentloom": {
+      "type": "http",
+      "url": "http://127.0.0.1:4317/mcp"
+    }
+  }
+}
+```
 
-Each tool calls the same HTTP API as the web UI in-process, so validation, approval rules and state checks are identical. A manual action on an automated run pauses its automation, as in the UI. Publishing requires the `preview_token` from `get_run_diff`, so the pull request contains exactly the previewed files. Responses are concise by default and bounded (outputs, diffs, file reads and event lists are truncated with guidance on narrowing). Tools carry read-only/destructive annotations so clients can ask before cancelling runs, overwriting workflows or disconnecting projects. Jev settings and browser folder imports are not exposed.
+For Codex, add the same URL to `~/.codex/config.toml` (these are the keys AgentLoom itself passes to Codex for its planning tools):
 
-The endpoint has the same boundary as the rest of the API: loopback-only, Host/Origin validated, no authentication. Anything that can reach it can act as you. Step output returned by the tools is agent-generated text; clients should treat it as data.
+```toml
+[mcp_servers.agentloom]
+url = "http://127.0.0.1:4317/mcp"
+```
 
-## Runtime boundaries
+Then ask your agent something like _"List AgentLoom workflows and projects, start a demo run of Review, Build and Verify on the welcome project, and tell me what it is waiting for."_
 
-This is a **trusted, single-user local platform**, not a multi-tenant service. Compose publishes only to `127.0.0.1`; the API also validates Host/Origin, rejects unknown request fields, and restricts file browsing to run directories. Do not expose it through a public reverse proxy without adding authentication and stronger isolation.
+| Area      | Tools (`agentloom_` prefix)                                                                              |
+| --------- | -------------------------------------------------------------------------------------------------------- |
+| Workflows | `list_workflows`, `save_workflow`, `list_providers`                                                      |
+| Projects  | `list_projects`, `browse_project_folders`, `connect_project`, `update_project`                           |
+| Runs      | `search_runs`, `get_run`, `start_run`, `respond_to_run` (approve, revise, reply, retry, …), `cancel_run` |
+| Results   | `list_run_files`, `read_run_file`, `get_run_diff`, `publish_pull_request`                                |
 
-Agents run as the non-root `node` user with the full shell access authorized for this local runner. Claude and OpenCode can use Bash; Codex runs with `danger-full-access` and CLI approval disabled. The production Compose service connects the host Docker daemon. Planning, design and review roles must preserve project source, while implementation may change source within the approved task. Those role rules and handoff approvals are workflow controls, not operating-system isolation. See `src/server/execution-policy.ts` for the instructions sent to every agent.
+Every tool calls the HTTP API in-process (`app.inject`), so validation, approval rules and state checks are identical to the UI. Publishing requires the `preview_token` from `get_run_diff`, so the PR contains exactly the previewed files. Tools carry read-only/destructive annotations, and responses are bounded. Like the rest of the API, the endpoint is loopback-only with Host/Origin checks and **no authentication**: anything that can reach it can act as you.
 
-Run copies are separate folders, not separate OS/container identities. The agents share a container user, runtime and credential volume. Do not use this v1 for adversarial repositories, mutually untrusted users, or strict per-agent data isolation. Approval gates control handoffs; they cannot undo an already executed step or prove its claims. Review the output and tests before approving.
+## Configuration
 
-CLI processes use argument arrays without a shell, a one-hour default total timeout, an output cap, and owned-process cancellation. Nonzero exits, malformed streams, empty output and reported output-length truncation fail the step. Provider-reported cost is shown where supplied; missing cost is not zero.
+Copy `.env.example` to `.env` for Docker Compose. All variables are optional.
 
-## Development and verification
+| Variable                                                  | Default           | Purpose                                                                                             |
+| --------------------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `DEEPSEEK_API_KEY` | empty             | Provider keys if you do not use CLI logins. `OPENAI_API_KEY` is passed to Codex as `CODEX_API_KEY`. |
+| `TYPESAFE_API_KEY`                                        | empty             | Fallback key for the optional Jev evaluator (can also be saved, encrypted, in the UI).              |
+| `PORT`                                                    | `4317`            | HTTP port (Compose publishes it on `127.0.0.1` only).                                               |
+| `WORKSPACE_ROOT`                                          | `./workspaces`    | Host directory for `projects/` and per-run `runs/` workspaces.                                      |
+| `PROJECTS_FOLDER`                                         | `..`              | Host parent directory the **Connect folder** browser may use (mounted at `/host-projects`).         |
+| `CLI_TIMEOUT_MS`                                          | `3600000` (1 h)   | Total runtime per agent turn (max 24 h).                                                            |
+| `CLI_IDLE_TIMEOUT_MS`                                     | `600000` (10 min) | Fail a turn with no output while no tool is running; `0` disables.                                  |
+| `MAX_OUTPUT_BYTES`                                        | `2097152` (2 MiB) | Captured bytes per agent process. Keep it finite; raise to e.g. `8388608` for large tasks.          |
 
-Requires Node 24 and npm. Install the pinned toolchain from the lockfile:
+Server-only variables (set by the Dockerfile and Compose, useful for `npm start`): `DATA_DIR` (default `./.data`), `HOST` (default `127.0.0.1`), `PROJECTS_ROOT` / `PROJECTS_HOST_ROOT`, and `CLAUDE_BIN` / `CODEX_BIN` / `OPENCODE_BIN`.
+
+## Project structure
+
+```text
+src/
+  client/            React UI: run overview, run detail, crates, workflow editor, projects, agents
+  server/
+    index.ts         config from env, startup and graceful shutdown
+    app.ts           Fastify composition root: routes, Host/Origin checks, CSP, wiring
+    engine.ts        run queue, step execution, approval/revision/retry/cancel transitions
+    engine-runtime.ts  binds real adapters to the engine's ports
+    ports/           application-owned repository and execution contracts
+    store.ts         SQLite repository (node:sqlite, WAL)
+    provider-process.ts, provider-stream.ts   spawn and parse Claude Code / Codex / OpenCode
+    mcp.ts           external MCP endpoint (16 tools)
+    ask-tool.ts, project-tools.ts             per-turn planning MCP server
+    workspaces.ts, projects.ts, git-workspaces.ts   folders, copies, worktrees, draft PRs
+    validation.ts, council.ts, automation.ts, jev.ts   evidence, reviews, routing, evaluator
+  shared/            pure policy and types shared by client and server
+tests/
+  *.test.ts          Node test runner: unit, engine, adapter-contract and HTTP/MCP tests
+  ui/*.spec.ts       Playwright suite against a disposable app with fake services
+  helpers/           app fixture, scripted agents, in-memory repository, fake effects
+docs/                user guide, architecture, testing, validation and pilot reports
+scripts/             live experiments and pilot harnesses (not part of default tests)
+```
+
+## Tech stack
+
+| Layer       | Choice                                                                                              |
+| ----------- | --------------------------------------------------------------------------------------------------- |
+| Runtime     | Node 24, TypeScript 5.9 with `strict`, ES modules                                                   |
+| Server      | Fastify 5, Zod 4 strict schemas, server-sent events, `@modelcontextprotocol/server` 2               |
+| Persistence | SQLite through the built-in `node:sqlite` (WAL), JSON documents per workflow/run                    |
+| UI          | React 19, Vite 8, lucide-react, Streamdown for streamed Markdown                                    |
+| Agents      | Claude Code, Codex and OpenCode CLIs (pinned versions in the `Dockerfile`), `git`, `gh`             |
+| Quality     | ESLint `strictTypeChecked` with custom import-boundary rules, Prettier, `node:test`, c8, Playwright |
+| Packaging   | Multi-stage Dockerfile, Docker Compose with healthcheck, non-root `node` user                       |
+
+## Testing and CI
 
 ```sh
-npm ci --include=dev
+npm run check     # format:check → lint → typecheck → test → build (what CI runs)
+npm run test:ui   # build, then the Playwright suite against a disposable app
 ```
 
-Prettier is the single formatting authority and ESLint enforces the type-aware
-`strictTypeChecked` preset with `--max-warnings=0`. The maintained scope is
-`src/**`, `tests/**`, the TypeScript project files and the supported scripts in
-`scripts/`; generated output, dependencies, workspaces, artifacts, credentials
-and historical research paths are excluded.
-
-```sh
-npm run lint          # ESLint, zero warnings allowed
-npm run lint:fix      # ESLint with autofixes
-npm run format        # write Prettier formatting
-npm run format:check  # verify formatting without writing
-npm run check         # format:check -> lint -> typecheck -> test -> build
-npm run typecheck
-npm test
-npm run build
-npm start
-```
-
-Run `npm run check` before delivery; the TypeScript strict flag stays enabled.
-Top-level `node:test` registrations in `tests/*.test.ts` use an explicit
-`void test(...)` because the runner owns their lifecycle. Nested `t.test(...)`
-subtests must be awaited, and other promises must be handled explicitly.
-
-For hot reload run `npm run dev` and `npm run dev:web` in separate terminals; Vite uses port 5173 and proxies the API to 4317. Stop the Compose service first if using the same API port.
-
-Editor settings in `.vscode/` select Prettier as the formatter and run ESLint
-fixes on save. Format-on-save is optional: set `"editor.formatOnSave": true` if
-you prefer it. `.editorconfig` and `.gitattributes` keep LF endings on every
-checkout, including Windows with `core.autocrlf=true`.
-
-To validate a change with Docker, build and run an isolated stack that never
-replaces the running platform:
-
-```sh
-docker compose -p agentloom-validate -f compose.validation.yaml up -d --build --wait
-docker compose -p agentloom-validate -f compose.validation.yaml ps
-curl http://127.0.0.1:4318/api/health
-docker compose -p agentloom-validate -f compose.validation.yaml down -v
-```
-
-The standalone validation configuration binds port 4318, explicitly clears all
-provider keys, and uses only project-scoped disposable volumes. It mounts neither
-host projects nor the Docker socket and does not reuse production credentials or
-data. Use a unique project name if another validation stack exists; port 4318 must
-be free. The final command removes only that validation project's volumes. Open
-http://localhost:4318 and use demo mode for manual smoke checks.
-
-The test helpers provide disposable app fixtures, scripted agents, bounded waits,
-and explicit fake external services. Workflow policy can run against an in-memory
-repository; adapter contracts exercise temporary SQLite and Git repositories.
-
-```sh
-npm run test:unit
-npm run test:integration
-npm run test:watch
-npm run test:coverage
-npm run test:ui
-npm run test:ui:docker
-```
-
-The browser command builds the app, starts a fresh temporary server on an assigned
-local port, and cleans up its database and workspace when it finishes. It does not
-reuse the running platform; caller-supplied `E2E_BASE_URL` and workspace overrides
-are rejected. Install Chromium with `npx playwright install chromium` for native
-browser tests, or use the Docker browser command for matching Linux libraries.
-CI runs the checks and browser suite without provider credentials.
-
-See [Testing](docs/TESTING.md) for focused commands, fixture examples and coverage
-interpretation, and [Architecture](docs/ARCHITECTURE.md) for policy and adapter
-boundaries. Crate delivery and PR machine record `npm run check`, so future
-AgentLoom tasks must pass formatting, lint, types, backend tests and build before
-review. Browser tests remain an additional gate for interaction changes.
-
-Scripts such as `node scripts/live-smoke.mjs` are separate live experiments: they
-create provider tasks, require authentication, and may incur charges. They are
-not part of the default test commands. An exit-zero CLI or waiting approval alone
-does not establish task correctness; inspect the output and recorded evidence.
-
-`node scripts/start-pilot.mjs` starts the four-stage live slug-utility pilot and leaves each handoff for manual review. `node scripts/check-restart.mjs <waiting-run-id>` tests restart recovery and approval persistence by restarting the entire Compose service; use only when other work may safely be interrupted.
-
-`docker compose logs -f platform` shows server logs. `docker compose restart` preserves history and credentials. `docker compose down` preserves volumes; `docker compose down -v` deletes history and credentials.
-
-See [validation report](docs/VALIDATION.md) for the actual acceptance results and limitations.
-
-## Interface
-
-AgentLoom uses one simple interface: a searchable run list, a dedicated review page, and expandable workflow and provider settings. The global **New run** button starts a task. **Needs attention** finds approvals, blocked steps and failed or interrupted runs. Open a run to read the output, inspect files and approve or request a revision. Approval controls follow the output and explain what happens next.
-
-The run overview groups attention items first, then in-progress work, then completed and cancelled history. Each row shows its current step and agent, completed-step progress, status and last update. Search, project and live/demo filters apply across the groups and are preserved when returning from a run. Each group initially shows eight rows with a **Show more** control. Failed and interrupted runs stay in **Needs attention**, rather than being buried in finished history. Progress counts completed steps; it does not estimate elapsed work or treat pending approval as completion.
-
-Technical step details and Jev settings expand when needed. Workflow drafts survive switching primary pages. On mobile, selecting a run opens its review page directly; Back to runs restores the search and filter.
-
-The earlier three-design comparison has been retired. Historical rationales remain in `docs/designs`. See [UX review](docs/UX-REVIEW.md) for findings and changes. `tests/ui/ux.spec.ts` checks the simplified interactions alongside the platform regression suite.
-
-## Adapter documentation
-
-- [Codex non-interactive execution](https://developers.openai.com/codex/noninteractive)
-- [Codex sandboxing](https://developers.openai.com/codex/security)
-- [Claude Code headless usage](https://code.claude.com/docs/en/headless)
-- [OpenCode CLI](https://opencode.ai/docs/cli/)
-- [OpenCode permissions](https://opencode.ai/docs/permissions/)
-
-### Planning conversations
-
-The Plan step supports a saved conversation. The planner asks questions, you reply in **Message the planner**, and the agent proposes an updated plan. You can keep clarifying a proposed plan before selecting **Approve plan and continue**. Only that approval starts the next step. Runs needing an answer appear under **Needs attention** with **Your reply needed**.
-
-Enable **Planning conversation** on any workflow step to use this behavior with Claude Code, Codex or OpenCode. Planning always uses read-only access and requires approval. Existing default Plan steps also support chat. Every turn replays the saved chronological conversation, including after a server restart; it does not depend on provider session resumption. Failed replies require an explicit retry and retain accepted messages. Approved conversations remain readable in the run.
-
-The planner reports `PLAN_QUESTIONS` or `PLAN_READY` on a final standalone line; missing markers keep the run waiting for input. These markers never approve a plan. Messages are limited to 8,000 characters; conversations to 80 messages / 80,000 serialized characters and full planning prompts to 120,000 characters. Oversized context is rejected rather than silently dropping earlier answers. The proposed plan carries the agreed requirements to downstream agents.
-
-### Live replies and the ask tool
-
-Chat and run output use Streamdown for Markdown, including tables, lists, code blocks and unfinished streamed formatting. Wide tables scroll horizontally inside the message. Semantic components use the app's own CSS. Provider HTML remains inert; links and images remain text rather than loading external resources.
-
-Planner MCP project tools appear in the conversation as expandable calls with their state, requested path/query and a bounded result summary. These calls are saved per turn and survive reload. Older project-tool log entries also appear when available, without arguments that were not recorded. Raw file contents and MCP connection URLs are not copied into these tool cards. Native Codex, Claude Code and OpenCode tool events also appear as expandable cards in Output for implementation, design and review steps, with arguments and completion/error summaries. Raw tool result bodies remain out of the cards. Saved Activity JSON can recover older calls; truncated completions are labeled result unavailable. Other provider diagnostics remain in Activity.
-
-Open runs receive server-sent updates, with polling as a fallback and a fresh saved snapshot after reconnecting. Claude emits partial text through `--include-partial-messages`; Codex and OpenCode CLI adapters show each text event as their CLIs emit it (which can be complete message blocks). The chat smooths text already received with a short adaptive display buffer; completion and reduced-motion preferences show the exact text immediately. Replies keep the same message element when completed. Text preceding an ask-tool question is retained in the conversation.
-
-The composer stays beneath the scrollable conversation. You can draft while the agent replies; sending waits until the reply is complete. **Enter** sends, **Shift + Enter** inserts a new line. The conversation follows new text while you are at the bottom. Scrolling up pauses following; **Jump to latest** resumes it. This improves display continuity but cannot make a CLI deliver text before it emits an event.
-
-Planning agents have a real `agentloom.ask_user` MCP tool with 1-3 questions and optional 2-4 choices per question. A panel above the composer shows one question at a time, with option descriptions, recommendations, custom answers and optional multiple selections. Single-choice answers advance automatically; multiple selections use **Next question**. Use **Back** to edit, then **Submit answers** to send the complete batch. Number keys select options while focused in the question panel, except while typing. Draft answers survive reload in the same browser tab; failed submissions retain them. **Reply in chat instead** allows a clarification or change of direction. The tool saves the questions, acknowledges that no answer is available yet, and tells the agent to end its turn. The user's answer starts the next turn with the saved conversation. An outstanding question always blocks plan approval, even if the agent emits `PLAN_READY`. Saved questions survive provider failure and server restart.
-
-The MCP endpoint is private to one planning turn, bound to loopback with an unguessable path, rejects browser origins and closes when the provider exits. It exposes `ask_user` plus `list_project_files`, `read_project_file` and `search_project` for read-only inspection of the run's selected workspace. Direct runs read the connected folder; isolated runs read their copy. Listings are paginated, reads include line numbers (up to 1 MB per file), and literal searches return bounded excerpts. The file tools reject paths outside the project, symlinks and excluded credential/config folders. They cannot approve runs, execute commands or change files. Claude, Codex and OpenCode planning configurations explicitly enable these tools. Question panels expand with their contents; long questions use page scrolling rather than a clipped, independently scrolling widget.
-
-Configuration references: [Codex MCP](https://developers.openai.com/codex/mcp), [Claude MCP](https://code.claude.com/docs/en/mcp), [OpenCode MCP](https://opencode.ai/docs/mcp-servers/), [MCP HTTP transport](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports).
-
-### Add a project from a folder
-
-In **Projects** or **New run**, choose **Import a copy**, then **Choose folder**. The system folder picker can select a folder anywhere on your computer; no extra Docker mounts are needed. Review the suggested project name and file count, then select **Create project**. The project is imported and selected automatically, and the task draft is preserved.
-
-This imports a copy into `workspaces/projects/<project-name>`; it is not a live link to the original folder. Imported projects default to isolated copies. Files under `.git`, `node_modules`, `.auth`, `.data`, and `.env` files are excluded; `.env.example` is retained. Imports support non-empty folders, at most 10,000 files/folders, 100 MB total and 10 MB per file. Empty subfolders and file permissions are not transferred by the browser picker. Existing project names are never overwritten.
-
-Uploads are staged with progress and cancellation. A project becomes available after all files arrive. Cancellation waits for the current file and removes the staged import. Inactive sessions expire after an hour; abandoned staging folders from a restart are removed after 24 hours when another import begins. Folder selection uses the browser directory picker, supported by current Chrome and Edge.
-
-### Connected host folders in Docker
-
-`PROJECTS_FOLDER` in `.env` selects the host parent directory for the folder browser. Compose mounts it read/write at `/host-projects`; the default is `..`, the directory containing AgentLoom. This installation is configured to `C:/Users/jonat/OneDrive/Documents/Projects`. Set another parent path and run `docker compose up -d` to change it. The browser accepts relative paths or full host paths within that directory. Direct connections do not upload or copy source files and are not subject to the import size limits.
-
-Only real directories within that mount can be connected; shortcuts, symlinks and traversal outside it are rejected. Disconnect preserves files and output history but revokes the file browser for past direct runs. Isolated run snapshots remain inspectable. Archived/disconnected/unavailable projects cannot start new runs. Existing imported projects are registered automatically and retain isolated mode; disconnect records are kept so they do not reappear automatically. Project settings are stored in the existing SQLite data volume.
-
-### Bookmarkable navigation
-
-The URL preserves the selected run, historical step, detail tab, open file, activity scope, run filters, project selection and workflow selection. Refreshing or opening the URL in another tab restores that view; browser Back and Forward navigate between selections. Search text updates the current history entry. Chat drafts, credentials and unsaved workflow edits are not included in URLs.
-
-### Resolve review findings
-
-On a blocked review or a review waiting for approval, **Send to implementer** returns the findings to the nearest completed writable step. It reuses the run workspace, repeats the intervening validation/review steps, preserves existing approval gates, and always requires approval of the fresh review. Earlier outputs remain expandable under **Previous attempt** and survive refresh and restart. This is an explicit handoff, not an automatic repair loop. The implementer must stay within approved scope and report BLOCKED when a decision is needed. Read-only workflows without a prior implementation do not offer this action. **Request revision** still reruns the current step to clarify or reconsider its output.
-
-### Shell and Docker access
-
-Agents have full shell execution inside the Linux runner: Claude exposes Bash with permission checks bypassed, Codex uses danger-full-access with no approval prompts, and OpenCode allows Bash and external directory access. Workflow access labels describe source-editing responsibilities, not a shell sandbox. Planning and review must preserve source; installing dependencies and generating validation artifacts are allowed. The current user-authorized execution policy also applies to saved runs and supersedes older shell/install prohibitions in their prompts. Scope decisions and workflow approvals still belong to the user.
-
-The runner includes Docker CLI and Compose and connects to Docker Desktop through `/var/run/docker.sock`. This grants control over the host Docker daemon. Test stacks must use distinct project names/ports and must not replace the active platform. Docker bind paths refer to the daemon host; use the platform container mount mappings to resolve run workspace paths. Agent processes receive `AGENTLOOM_PLATFORM_CONTAINER` and `AGENTLOOM_WORKSPACE` for this purpose. Development dependencies are not suppressed by the platform's production NODE_ENV. Windows host PowerShell is not provided by the Linux container.
-
-### Chat on every step
-
-Plan, design, implementation and review each have a chat composer. Enter sends; Shift+Enter inserts a newline. Messages are saved with the step, and drafts survive refresh in the same browser tab. You can draft during execution and send when the agent stops. Follow-up replies always wait for approval. Sending to an earlier completed step reopens it and invalidates downstream results and approvals; prior downstream conversations and outputs remain in attempt history. Steps that have not started cannot accept messages yet. Model, effort and execution access are displayed in the composer.
-
-### Agent time limits
-
-`CLI_TIMEOUT_MS` controls the total runtime per agent turn (default `3600000`, one hour; maximum 24 hours). `CLI_IDLE_TIMEOUT_MS` separately detects a provider that produces no output while no tool is running (default `600000`, ten minutes; `0` disables idle detection). Output resets the idle timer. Reported running tools suspend it, so quiet builds can continue up to the total runtime limit. `MAX_OUTPUT_BYTES` caps the captured bytes per agent process: both Compose and the server default to `2097152` (2 MiB); keep it finite. Larger tasks can opt into a higher cap such as `8388608` (8 MiB). Set these values in `.env` and recreate the Compose service to apply them. Failed runs require an explicit retry; workspace changes remain available.
-
-### Jev review advice
-
-When a live review finishes, Jev uses the configured TypeSafe key to classify the task and review text as a code fix, missing requirement, environment blocker, mixed blockers, no blocker, or unclear. No workspace files are uploaded. Results are saved with the review, display confidence, and never approve, advance or restart work. Confidence below 60% is shown as needing clarification. Missing credentials and upstream errors leave the workflow usable; the review panel offers a manual retry. Demo runs do not trigger automatic evaluations.
-
-For environment or requirement issues, **Draft follow-up** prepares an editable step-chat message without sending it. Code-fix advice points to the existing explicit **Send to implementer** handoff. Older reviews can be classified with **Classify with Jev**. Late responses are ignored if the attempt or output has changed.
-
-When Jev is uncertain (classification confidence below 60%, or an unclear classification), approval requires explicitly checking the acknowledgment beside the approval button. The server requires an acknowledgment tied to that assessment; stale acknowledgments are rejected. Reclassification or refresh clears the checkbox. Approval records the acknowledgment in Activity. Approval also waits for an in-progress assessment to finish. Classification confidence does not measure code correctness.
-
-### Git worktrees and draft pull requests
-
-In **Projects**, choose **Git worktree (branch per run)**. The source must be the repository root, with an initial commit, a checked-out branch and no uncommitted changes. Each new run starts from the current committed HEAD on `agentloom/<run-id>`. Existing runs retain their original workspace mode.
-
-AgentLoom keeps a managed bare Git repository in its data volume and creates real worktrees under `workspaces/runs`. This leaves the original checkout and its Git metadata unchanged and supports concurrent runs. Worktrees and branches remain available after failures and completion; they are not automatically deleted. Git commands for these worktrees run inside the platform container because their metadata paths belong to that environment.
-
-For PRs, configure a GitHub `origin` on the source before starting the run and sign in once:
-
-```powershell
-docker compose exec platform gh auth login --hostname github.com --git-protocol https --web
-```
-
-After every workflow step is approved, expand **Branch / Diff and draft PR**, inspect the patch, edit the title and description, and choose **Create draft PR**. The platform snapshots and commits the previewed files, pushes only the run branch, and creates a draft against the source branch. It never force-pushes or merges. Changed files invalidate an old preview; refresh it before publishing. Potential credential filenames are rejected. Authentication failures can be retried, and a previously created PR is recovered without creating a duplicate. The PR link is saved with the run. Published runs require a new run for follow-up implementation.
-
-Direct-folder and isolated-copy runs cannot publish through this action. A GitHub remote and authentication are only required for publishing, not for local worktree runs.
-
-### Approved Task to Verified Delivery
-
-Select this workflow for: approved task -> cheap implementation -> recorded validation and Jev signals -> strong review -> human approval. Codex GPT-6-Astra handles planning and review; OpenCode uses deepseek/deepseek-flash with max effort for implementation. Models remain editable under Workflows.
-
-Before creating a run, expand **Tests and Jev signals** in Workflows and configure the exact validation programs, arguments (one per line), and time limits. The defaults are npm run typecheck, npm test and npm run build, suitable for this project. Other repositories need their own commands. The run snapshots the commands; the planning agent presents them for approval. Commands execute directly, without interpreting shell operators. A validation step runs commands itself, never asks the coding model to report whether they passed.
-
-Each attempt records exit codes, bounded output, start/end times, source fingerprints and Jev signals. Expand the validation step or **Validation evidence and Jev signals** under the review to inspect them. Jev receives bounded task, approved-plan, implementation-report and command-output excerpts, not source files. Its probabilities are advisory. A transient Jev failure is retried once; missing credentials or a continuing failure are shown explicitly to the reviewer.
-
-Failed or timed-out commands and source changes during validation prevent final approval, even if the reviewer claims success. The approval API rechecks the source fingerprint. Review blockers, including Markdown-formatted BLOCKED verdicts, also prevent approval. Send findings to the implementer to repair, rerun validation and obtain a fresh review. Prior evidence remains in attempt history. Re-running validation through its chat repeats the same approved commands; changing the command contract requires a new run.
-
-Fingerprints cover up to 20,000 files / 100 MB and reject source symlinks. Git metadata, dependencies, standard build/cache/coverage/report directories, artifacts, and local .env secrets are excluded. Fingerprints establish freshness within that scope; test coverage and correctness still require review. Output is limited to the last 64,000 characters per command and is marked when truncated.
-
-## Outcome council (opt-in)
-
-Choose **Approved Task with Outcome Council** under Workflows. This preserves the approved-task / cheap-implementer / recorded-tests-and-Jev pipeline and replaces the final review with three independent reviewers followed by a product-owner chair. Configure each reviewer provider/model/effort and focus in the council step; the step's main model is the chair. Defaults use Codex GPT-6-Astra for correctness, adversarial verification and chair, and Claude Fable 5.1 for product/UX. The same configured implementer model cannot grade its own work.
-
-A run-start file-hash manifest records added, modified and deleted source paths for scope review. Completed reports survive interruption; retry only resumes unfinished members and retains a completed chair. Unresolved blocker IDs also carry through repair handoffs until a reviewer retains or explicitly resolves them. Each first-pass reviewer receives a separate source copy made from the same in-memory snapshot, with the same task, approved outputs, recorded commands/results and Jev signals. First-pass reports are hidden from peers. Reports carry criterion IDs, evidence references and findings; malformed, failed or missing reports never count as passes. The chair identifies disputes but cannot outvote a blocker. Jev signals are advisory and have no approval vote.
-
-The quiet Council panel streams each expanded member and the chair, with tool groups separated by response text. It shows statuses, exact-duplicate finding groups and expandable evidence. **Request evidence** runs one focused challenge on the same revision. Reviewers must retain their own prior blockers or explicitly cite counter-evidence for resolving them. Initial reports remain visible. Remaining blockers/disputes require a repair or clarified new run. **Send to implementer** repeats implementation, validation and a fresh council round, preserving history. Final approval requires all checks and council reports to pass against current source and evidence.
-
-Source fingerprints share the recorded-validation exclusions (dependencies, build outputs, runtime data, credentials in .env files). Snapshot limits are 20,000 files / 100 MB; evidence bundles are limited to 240,000 characters. Each council copy excludes Git metadata and dependencies; reviewers rely on the approved scope and supplied evidence and may run focused probes. This is not a Git-diff security audit. Source copies are retained under the data directory's council/run-id folder. Full-shell providers remain trusted processes: these copies and read-only instructions are not a security sandbox. Mutation of a reviewer's source copy invalidates its report; mutation of the run source invalidates approval. Evidence references and resolutions are model claims that the chair and user must inspect, not executable proof.
-
-## PR machine (opt-in)
-
-For a live Git-worktree project using an approved-plan workflow with a final outcome council, choose **PR machine · automatic draft PR** under **Delivery** when creating the run. Review and approve the initial plan. That approval authorizes Jev to route up to two in-scope repairs and complete the run when current validation and council evidence pass. Existing runs and the default delivery choice retain manual approval gates. Work-package/model/skill selection remains a [research proposal](docs/WORK_PACKAGES_PROPOSAL.md).
-
-The PR-machine panel shows policy, repair count and recorded routing decisions. Low confidence, missing evidence or a product decision pauses automation. **Pause automation** lets current work finish without applying the next decision. Manual messages and run actions take control; **Resume automation** restores routing when the run is ready. A server restart pauses automation and preserves run history. Recover an interrupted step first, then resume.
-
-Routing receives recorded validation status and the last 500 characters of passing command output, or 2,000 for failed commands. Full logs remain in the run. Evidence exceeding the 30,000-character routing budget pauses for manual review rather than silently dropping criteria or reports.
-
-**Repeat validation and review** preserves history and reruns the existing command contract and council without another implementation attempt. Inspect the new results before resuming automation. Publication failures offer **Retry publication**, which retries GitHub without rerunning agents. Final approval binds the exact Git tree; changed files must be revalidated and approved. Publication creates a draft on the run's dedicated branch and never merges it. GitHub authentication must be available through `gh` in the platform container.
+- **196 backend tests** (`node:test`) cover the engine's state transitions, approval guards, retries, restart recovery, provider stream parsing, real subprocess handling (timeouts, output caps, cancellation), HTTP/Host/Origin validation, the MCP tools, SQLite and Git adapter contracts.
+- **31 browser tests** (Playwright) run against a freshly built app with fake providers: gated revisions, planner questions, streaming, worktrees and draft PRs (against a fake GitHub), council, crates, mobile layout.
+- Default tests never call a real provider, Jev or GitHub; unexpected external calls fail the test.
+- [GitHub Actions](.github/workflows/validation.yml) runs `npm run check` and the browser suite on every push and pull request, without credentials.
+
+More in [Testing](docs/TESTING.md) and [Development](docs/DEVELOPMENT.md).
+
+## Design decisions and trade-offs
+
+- **Drive the vendor CLIs instead of calling model APIs.** Claude Code, Codex and OpenCode already have tool loops, auth and permission models. AgentLoom orchestrates them and normalises their three JSON stream formats. The cost is coupling to CLI flags and output formats, so CLI versions are pinned in the image.
+- **Humans approve; models advise.** Evaluator scores, council reports and agent claims never approve a step on their own. The one automated path, the opt-in PR machine, is authorized by a human at plan approval and capped at two repairs. Validation is executed and recorded by the platform rather than reported by the model, and `BLOCKED` is a first-class outcome rather than an error.
+- **Pure policy behind ports.** Workflow decisions are pure functions; SQLite, processes, Git and HTTP live behind small ports wired at one composition root. Policy tests need no database, CLI or network, and app tests swap in scripted agents and fake external services. ESLint rules keep the boundaries from eroding.
+- **SQLite via `node:sqlite`, JSON documents.** No native modules or migration framework; a run is one JSON document plus an event log. Trade-off: no relational queries over run internals, and SSE sends full run snapshots (idempotent on reconnect, heavier on the wire).
+- **One API, two front doors.** The MCP endpoint calls the HTTP API in-process instead of reimplementing actions, so the UI and agents share validation and state rules.
+- **Fail loudly, retry explicitly.** Non-zero exits, malformed streams, empty output and truncation fail the step. Restarts mark work `interrupted`. Retries, revisions and repairs are user actions or bounded, recorded automation decisions.
+- **Local and single-user by design.** Loopback binding, Host/Origin checks and strict request schemas, but no authentication. That keeps setup trivial and rules out exposing it to a network.
+
+## Limitations
+
+- **Not a sandbox.** Agents run with full shell access as one container user; Codex runs with `danger-full-access`, and the production Compose file mounts the host Docker socket. Role access levels and approval gates are workflow controls, not OS isolation. Do not use it with untrusted repositories or users.
+- **No authentication.** Anything that can reach the port, including the MCP endpoint, can act as you.
+- **Approval cannot undo.** A gate stops the _next_ step; it cannot reverse what a step already did to its workspace. Direct-folder runs edit your files in place.
+- **Two concurrent runs**, fixed in the engine. Model catalogs depend on each CLI and account.
+- **Demo outputs are placeholders.** Demo mode exercises the workflow mechanics, not agent quality.
+- **Next steps are proposals, not features.** Work-package routing is documented as a [research proposal](docs/WORK_PACKAGES_PROPOSAL.md); crates currently support one level of children and human-triaged PR feedback ([Crates](docs/CRATES.md)).
+
+Recorded pilots with real providers, including the targets they missed, are in [PR machine pilot results](docs/PR_MACHINE_PILOT_RESULTS.md) and [reliable delivery results](docs/RELIABLE_DELIVERY_RESULTS.md).
+
+## Documentation
+
+| Document                                | Contents                                                                                                                     |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| [User guide](docs/USER_GUIDE.md)        | Workflows, providers, projects, gates, planning, worktrees, PRs, council, PR machine, Jev, MCP reference, runtime boundaries |
+| [Development](docs/DEVELOPMENT.md)      | Toolchain, checks, hot reload, Docker validation stack, live experiments                                                     |
+| [Architecture](docs/ARCHITECTURE.md)    | Policy/port/adapter boundaries and where changes belong                                                                      |
+| [Testing](docs/TESTING.md)              | Test commands, fixtures and examples, coverage                                                                               |
+| [Crates](docs/CRATES.md)                | Split/join and PR feedback                                                                                                   |
+| [Validation record](docs/VALIDATION.md) | Acceptance results and limitations                                                                                           |
+| [AGENTS.md](AGENTS.md)                  | Rules for coding agents working on this repository                                                                           |
